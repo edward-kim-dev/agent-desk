@@ -1,0 +1,49 @@
+# OS / 에디터
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+*.iml
+
+# Node.js / pnpm / yarn
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+npm-debug.log*
+pnpm-debug.log*
+.pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 빌드 / 캐시 산출물
+/.next/
+/out/
+/build
+/coverage
+*.tsbuildinfo
+next-env.d.ts
+
+# 환경 변수 / 시크릿
+.env
+.env.*
+!.env.example
+*.pem
+
+# 로컬 개발 DB (SQLite 등)
+/data
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# 배포 도구
+.vercel
+
+# 일반 로그
+*.log
