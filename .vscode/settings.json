@@ -1,0 +1,9 @@
+{
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "eslint.workingDirectories": [{ "mode": "auto" }],
+  "files.exclude": {
+    "**/.next": true,
+    "**/dist": true,
+    "**/*.tsbuildinfo": true
+  }
+}
