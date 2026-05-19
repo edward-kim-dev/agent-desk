@@ -3,6 +3,20 @@ import { promisify } from "node:util";
 
 const execFileP = promisify(execFile);
 
+const DEBUG_ENV_KEYS = [
+  "NODE_OPTIONS",
+  "NODE_INSPECT_PUBLISH_UID",
+  "VSCODE_INSPECTOR_OPTIONS",
+];
+
+export function envWithoutDebug(
+  source: NodeJS.ProcessEnv = process.env
+): NodeJS.ProcessEnv {
+  const clean: NodeJS.ProcessEnv = { ...source };
+  for (const k of DEBUG_ENV_KEYS) delete clean[k];
+  return clean;
+}
+
 export interface ExecLike {
   (cmd: string, args: string[]): Promise<{ stdout: string; stderr: string }>;
 }
@@ -40,7 +54,9 @@ function isNoServer(err: unknown): boolean {
 
 export function createTmuxClient(opts: { exec?: ExecLike } = {}): TmuxClient {
   const exec: ExecLike =
-    opts.exec ?? ((cmd, args) => execFileP(cmd, args, { encoding: "utf8" }));
+    opts.exec ??
+    ((cmd, args) =>
+      execFileP(cmd, args, { encoding: "utf8", env: envWithoutDebug() }));
 
   async function listSessions(): Promise<TmuxSessionInfo[]> {
     try {
@@ -66,6 +82,8 @@ export function createTmuxClient(opts: { exec?: ExecLike } = {}): TmuxClient {
   }
 
   async function newSession(input: NewSessionInput): Promise<void> {
+    const unsetPrefix = DEBUG_ENV_KEYS.map((k) => `-u ${k}`).join(" ");
+    const wrapped = `env ${unsetPrefix} ${input.command}`;
     await exec("tmux", [
       "new-session",
       "-d",
@@ -73,7 +91,7 @@ export function createTmuxClient(opts: { exec?: ExecLike } = {}): TmuxClient {
       input.name,
       "-c",
       input.cwd,
-      input.command,
+      wrapped,
     ]);
   }
 

@@ -1,5 +1,6 @@
 import * as pty from "node-pty";
 import type { WebSocket } from "ws";
+import { envWithoutDebug } from "./commands";
 
 const BATCH_INTERVAL_MS = 16;
 const BACKPRESSURE_THRESHOLD = 1 << 20; // 1MB
@@ -22,7 +23,7 @@ export function attachPtyToSocket(opts: AttachOptions): { dispose: () => void } 
       cols: opts.cols,
       rows: opts.rows,
       cwd: process.cwd(),
-      env: process.env as Record<string, string>,
+      env: envWithoutDebug() as Record<string, string>,
     }
   );
 
