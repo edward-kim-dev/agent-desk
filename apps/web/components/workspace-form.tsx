@@ -9,7 +9,7 @@ export function WorkspaceForm(props: { onCreated: () => void }) {
 
   return (
     <form
-      className="flex gap-2"
+      className="flex flex-col gap-2"
       onSubmit={async (e) => {
         e.preventDefault();
         setError(null);
@@ -24,19 +24,19 @@ export function WorkspaceForm(props: { onCreated: () => void }) {
       }}
     >
       <input
-        className="rounded border px-2 py-1 text-sm"
+        className="w-full rounded border px-2 py-1 text-sm"
         placeholder="name"
         value={name}
         onChange={(e) => setName(e.target.value)}
       />
       <input
-        className="rounded border px-2 py-1 text-sm flex-1"
+        className="w-full rounded border px-2 py-1 text-sm"
         placeholder="/absolute/path"
         value={path}
         onChange={(e) => setPath(e.target.value)}
       />
-      <button className="rounded border px-3 py-1 text-sm">add</button>
-      {error && <div className="text-sm text-red-600">{error}</div>}
+      <button className="self-end rounded border px-3 py-1 text-sm">add</button>
+      {error && <div className="break-words text-sm text-red-600">{error}</div>}
     </form>
   );
 }

@@ -26,7 +26,7 @@ export function SessionList(props: {
           }`}
         >
           <button
-            className="flex-1 text-left"
+            className="min-w-0 flex-1 truncate text-left"
             onClick={() => props.onSelect(s.id)}
             title={`${s.cli ?? "?"} • ${s.attachedClients} client(s)`}
           >

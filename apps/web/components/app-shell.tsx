@@ -39,7 +39,7 @@ export function AppShell() {
   }, [refreshSessions]);
 
   return (
-    <div className="grid h-screen grid-rows-[auto_1fr] grid-cols-[16rem_1fr_24rem]">
+    <div className="grid h-screen grid-rows-[auto_1fr] grid-cols-[18rem_1fr_24rem]">
       <header className="col-span-3 flex items-center gap-4 border-b px-4 py-2">
         <h1 className="font-semibold">agent-desk</h1>
         <WorkspaceSwitcher
@@ -50,7 +50,7 @@ export function AppShell() {
         <div className="flex-1" />
         <span className="text-xs text-zinc-500">v0.1</span>
       </header>
-      <aside className="border-r p-3 flex flex-col gap-3">
+      <aside className="flex min-w-0 flex-col gap-3 overflow-y-auto border-r p-3">
         <WorkspaceForm onCreated={refresh} />
         <section className="text-xs uppercase text-zinc-500 mt-2 flex items-center justify-between">
           sessions
