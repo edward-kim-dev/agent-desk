@@ -1,36 +1,57 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# agent-desk
 
-## Getting Started
+브라우저에서 tmux 기반 CLI AI 코딩 세션(claude, gemini, codex 등)을 관리하고 `wiki/` 디렉터리를 편집하는 단일 페이지 웹 제품. 자세한 설계는 `docs/superpowers/specs/2026-05-19-agent-desk-design.md`.
 
-First, run the development server:
+## Prerequisites
+
+- Node.js 22.x (`.nvmrc` 참고)
+- pnpm 9+
+- tmux 3.x (host 또는 devcontainer 내부)
+- 빌드 툴체인 (node-pty 컴파일용): Linux는 `build-essential`, macOS는 Xcode CLT
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# Debian/Ubuntu
+sudo apt-get install -y tmux build-essential python3
+
+# macOS
+brew install tmux
+xcode-select --install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Quickstart
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+cp .env.example .env
+# AGENT_DESK_TOKEN을 직접 채우거나:
+echo "AGENT_DESK_TOKEN=$(openssl rand -hex 24)" > .env
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+pnpm install
+pnpm dev
+```
 
-## Learn More
+- Web: http://localhost:3333
+- Gateway: http://127.0.0.1:3334 (헬스: `/health`)
 
-To learn more about Next.js, take a look at the following resources:
+## Scripts
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- `pnpm dev` — web + gateway 동시 실행 (`pnpm -r --parallel dev`)
+- `pnpm build` — 두 앱 모두 프로덕션 빌드
+- `pnpm test` — 모든 워크스페이스 테스트
+- `pnpm typecheck` — composite refs 빌드
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 데이터
 
-## Deploy on Vercel
+SQLite DB와 WAL/SHM은 `agent-desk/data/`에 저장되며 `.gitignore`로 커밋되지 않는다. 머신 간 이전은 디렉터리 통째 복사.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## 보안
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- 게이트웨이는 기본값으로 `127.0.0.1:3334`에 바인딩한다.
+- 베어러 토큰은 `AGENT_DESK_TOKEN` 환경 변수로만 주입한다. 설정 파일에 저장하지 않는다.
+- v0.1은 단일 사용자 가정이다. 멀티 사용자 인증, 외부 노출은 v0.2+.
+
+## 알려진 한계 (v0.1)
+
+- xterm.js에서 한글 IME 조합이 부정확할 수 있다. v0.2 채팅 스타일 입력 바로 해결 예정.
+- 어돕션된 외부 tmux 세션은 자동 종료되지 않는다.
+- 위키 SCHEMA 검증은 비차단 경고이며 차단하지 않는다.
+- `pnpm --filter @agent-desk/web build`는 Next 16.2의 `/_global-error` 내부 페이지 사전 렌더에서 `useContext` 오류로 실패한다 (Next 업스트림 이슈). `pnpm --filter @agent-desk/web dev`는 정상 동작한다. 운영 빌드가 필요하면 Next 패치 이후 재시도하거나 `output: "standalone"` 등을 검토하라.
