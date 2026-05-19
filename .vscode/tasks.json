@@ -1,0 +1,56 @@
+{
+  // Run Task (Ctrl/Cmd+Shift+P → "Tasks: Run Task") 에서 호출.
+  // 기본 빌드는 "전체 타입체크" (Ctrl/Cmd+Shift+B).
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "전체 테스트",
+      "type": "shell",
+      "command": "pnpm -r test",
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": [],
+      "group": "test",
+      "presentation": { "panel": "dedicated", "reveal": "always" }
+    },
+    {
+      "label": "전체 타입체크",
+      "type": "shell",
+      "command": "pnpm typecheck",
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": ["$tsc"],
+      "group": { "kind": "build", "isDefault": true },
+      "presentation": { "panel": "dedicated", "reveal": "always" }
+    },
+    {
+      "label": "gateway: 테스트",
+      "type": "shell",
+      "command": "pnpm test",
+      "options": { "cwd": "${workspaceFolder}/apps/gateway" },
+      "problemMatcher": [],
+      "group": "test"
+    },
+    {
+      "label": "web: 테스트",
+      "type": "shell",
+      "command": "pnpm test",
+      "options": { "cwd": "${workspaceFolder}/apps/web" },
+      "problemMatcher": [],
+      "group": "test"
+    },
+    {
+      "label": "shared: 테스트",
+      "type": "shell",
+      "command": "pnpm test",
+      "options": { "cwd": "${workspaceFolder}/packages/shared" },
+      "problemMatcher": [],
+      "group": "test"
+    },
+    {
+      "label": "drizzle: 마이그레이션 생성",
+      "type": "shell",
+      "command": "pnpm db:generate",
+      "options": { "cwd": "${workspaceFolder}/apps/gateway" },
+      "problemMatcher": []
+    }
+  ]
+}

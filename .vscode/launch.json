@@ -1,0 +1,89 @@
+{
+  // 사전 준비: 아래 명령으로 agent-desk/.env 를 만들어 두세요.
+  //   cp .env.example .env
+  //   echo "AGENT_DESK_TOKEN=$(openssl rand -hex 24)" >> .env
+  //
+  // 모든 dev 설정은 ${workspaceFolder}/.env 를 자동으로 로드합니다.
+  // ${workspaceFolder} 는 agent-desk 디렉터리입니다.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "gateway: dev",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "pnpm dev",
+      "cwd": "${workspaceFolder}/apps/gateway",
+      "envFile": "${workspaceFolder}/.env"
+    },
+    {
+      "name": "web: dev",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "pnpm dev",
+      "cwd": "${workspaceFolder}/apps/web",
+      "envFile": "${workspaceFolder}/.env"
+    },
+    {
+      "name": "gateway: 디버그 (tsx)",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "${workspaceFolder}/apps/gateway/node_modules/.bin/tsx",
+      "args": ["src/main.ts"],
+      "cwd": "${workspaceFolder}/apps/gateway",
+      "envFile": "${workspaceFolder}/.env",
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**", "**/node_modules/**"]
+    },
+    {
+      "name": "vitest: 현재 파일 디버그",
+      "type": "node",
+      "request": "launch",
+      "autoAttachChildProcesses": true,
+      "program": "${fileDirname}/../node_modules/.bin/vitest",
+      "args": ["run", "${relativeFile}"],
+      "cwd": "${fileDirname}/..",
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**", "**/node_modules/**"]
+    },
+    {
+      "name": "vitest: gateway 전체",
+      "type": "node",
+      "request": "launch",
+      "autoAttachChildProcesses": true,
+      "program": "${workspaceFolder}/apps/gateway/node_modules/.bin/vitest",
+      "args": ["run"],
+      "cwd": "${workspaceFolder}/apps/gateway",
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**", "**/node_modules/**"]
+    },
+    {
+      "name": "vitest: web 전체",
+      "type": "node",
+      "request": "launch",
+      "autoAttachChildProcesses": true,
+      "program": "${workspaceFolder}/apps/web/node_modules/.bin/vitest",
+      "args": ["run"],
+      "cwd": "${workspaceFolder}/apps/web",
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**", "**/node_modules/**"]
+    },
+    {
+      "name": "vitest: shared 전체",
+      "type": "node",
+      "request": "launch",
+      "autoAttachChildProcesses": true,
+      "program": "${workspaceFolder}/packages/shared/node_modules/.bin/vitest",
+      "args": ["run"],
+      "cwd": "${workspaceFolder}/packages/shared",
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**", "**/node_modules/**"]
+    }
+  ],
+  "compounds": [
+    {
+      "name": "전체: web + gateway dev",
+      "configurations": ["gateway: dev", "web: dev"],
+      "stopAll": true
+    }
+  ]
+}
