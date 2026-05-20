@@ -30,7 +30,7 @@ export function TerminalPanel(props: { sessionId: number | null }) {
   );
 
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (!containerRef.current || props.sessionId == null) return;
     const term = new Terminal({
       allowProposedApi: true,
       convertEol: false,
@@ -68,14 +68,16 @@ export function TerminalPanel(props: { sessionId: number | null }) {
       term.dispose();
       termRef.current = null;
     };
-  }, [send, resize]);
+  }, [send, resize, props.sessionId]);
 
-  if (props.sessionId == null) {
-    return (
-      <div className="flex h-full items-center justify-center text-zinc-500">
-        select or create a session
-      </div>
-    );
-  }
-  return <div ref={containerRef} className="h-full w-full" />;
+  return (
+    <div className="relative h-full w-full">
+      <div ref={containerRef} className="h-full w-full" />
+      {props.sessionId == null && (
+        <div className="absolute inset-0 flex items-center justify-center text-zinc-500">
+          select or create a session
+        </div>
+      )}
+    </div>
+  );
 }
