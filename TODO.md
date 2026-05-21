@@ -5,3 +5,8 @@
 - [ ] tmux 등 외부 미들웨어가 호스트/컨테이너에 없는 경우에 대한 조치 필요
   - 현재 게이트웨이는 tmux 없이도 기동되지만 discovery 루프가 5초마다 `ENOENT` 에러를 로그에 토해낸다.
   - 옵션: (a) `isNoServer` 가드를 `ENOENT`까지 넓혀 조용히 빈 결과 반환, (b) tmux/claude/codex 설치를 devcontainer뿐 아니라 로컬(호스트) 사용자도 커버하도록 자동화 — `pnpm dev` 또는 게이트웨이 부팅 시 사전 점검 후 누락 안내/설치 스크립트 제공(OS별: apt / brew / npm 등), (c) 헬스 엔드포인트에서 미들웨어 가용성 노출.
+
+## UI 재편 (2026-05-20)
+
+- [ ] v0.3: Graph 렌더링 (cytoscape 또는 d3-force), Harness/Hooks/Agents 실데이터 연결, Settings.Database 마이그레이션 실행.
+- v0.2 와이어프레임: 상단 탭(Terminal/Wiki/Graph/Harness/Settings) 풀스크린 구조. Graph/Harness/Settings 는 placeholder.
