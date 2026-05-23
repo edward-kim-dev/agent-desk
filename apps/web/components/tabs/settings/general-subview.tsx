@@ -4,7 +4,7 @@ export function GeneralSubview() {
   return (
     <div data-stub="true" className="flex flex-col gap-4 p-4 text-sm">
       <fieldset disabled>
-        <legend className="text-xs uppercase text-zinc-500">Theme</legend>
+        <legend className="text-xs uppercase opacity-55">Theme</legend>
         <div className="mt-2 flex gap-4 text-xs">
           {["auto", "light", "dark"].map((t, i) => (
             <label key={t} className="flex items-center gap-2">
@@ -14,7 +14,7 @@ export function GeneralSubview() {
           ))}
         </div>
       </fieldset>
-      <div className="text-xs text-zinc-500">About agent-desk v0.2</div>
+      <div className="text-xs opacity-55">About agent-desk v0.2</div>
     </div>
   );
 }

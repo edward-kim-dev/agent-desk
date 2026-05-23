@@ -1,6 +1,10 @@
 "use client";
 import { TAB_LABELS, TAB_ORDER, type TabKey } from "./types";
 
+const STUB: Partial<Record<TabKey, boolean>> = {
+  graph: true,
+};
+
 export function TabBar(props: {
   value: TabKey;
   onChange: (next: TabKey) => void;
@@ -9,7 +13,7 @@ export function TabBar(props: {
     <nav
       role="tablist"
       aria-label="agent-desk 모드"
-      className="flex items-center gap-1 border-b px-2"
+      className="flex items-center"
     >
       {TAB_ORDER.map((key) => {
         const active = key === props.value;
@@ -19,13 +23,22 @@ export function TabBar(props: {
             role="tab"
             aria-current={active ? "page" : undefined}
             onClick={() => props.onChange(key)}
-            className={`px-3 py-2 text-sm ${
-              active
-                ? "border-b-2 border-zinc-900 font-semibold dark:border-zinc-100"
-                : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
-            }`}
+            className={[
+              "ml-7 first:ml-0 text-[11px] uppercase tracking-[0.22em]",
+              "text-[#1a1208] transition-opacity",
+              active ? "opacity-100 font-semibold" : "opacity-65 hover:opacity-100",
+              "bg-transparent border-0 p-0 cursor-pointer",
+            ].join(" ")}
           >
             {TAB_LABELS[key]}
+            {STUB[key] && (
+              <span
+                aria-hidden
+                className="ml-1.5 normal-case tracking-normal opacity-50"
+              >
+                (wip)
+              </span>
+            )}
           </button>
         );
       })}

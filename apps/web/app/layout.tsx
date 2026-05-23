@@ -12,7 +12,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   const { gatewayToken } = getServerEnv();
   return (
     <html lang="en" className="h-full">
-      <body className="min-h-full bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
+      <body className="min-h-full">
         <Script
           id="agent-desk-token"
           strategy="beforeInteractive"

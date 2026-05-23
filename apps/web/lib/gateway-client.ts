@@ -22,8 +22,6 @@ export const gateway = {
         method: "POST",
         body: JSON.stringify(input),
       }),
-    remove: (id: number) =>
-      fetch(`/api/proxy/workspaces/${id}`, { method: "DELETE" }),
   },
   sessions: {
     list: () => call<{ sessions: SessionDto[] }>(`sessions`),

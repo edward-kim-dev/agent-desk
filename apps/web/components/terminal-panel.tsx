@@ -35,6 +35,16 @@ export function TerminalPanel(props: { sessionId: number | null }) {
       allowProposedApi: true,
       convertEol: false,
       cursorBlink: true,
+      fontFamily: '"D2Coding Ligature", "D2Coding", Menlo, Consolas, "Courier New", monospace',
+      fontSize: 13,
+      lineHeight: 1.2,
+      theme: {
+        background: "#ffffff",
+        foreground: "#1a1208",
+        cursor: "#1a1208",
+        cursorAccent: "#ffffff",
+        selectionBackground: "rgba(26, 18, 8, 0.2)",
+      },
     });
     const fit = new FitAddon();
     term.loadAddon(fit);
@@ -43,6 +53,17 @@ export function TerminalPanel(props: { sessionId: number | null }) {
     term.unicode.activeVersion = "11";
     term.open(containerRef.current);
     fit.fit();
+
+    // xterm measures glyphs at open(); re-fit once the web font is ready so cols/rows match.
+    if (typeof document !== "undefined" && document.fonts?.load) {
+      document.fonts.load('13px "D2Coding Ligature"').then(() => {
+        if (termRef.current === term) {
+          term.refresh(0, term.rows - 1);
+          fit.fit();
+          resize(term.cols, term.rows);
+        }
+      }).catch(() => {});
+    }
 
     term.attachCustomKeyEventHandler((ev) => {
       const k = ev.key.toLowerCase();
@@ -74,7 +95,7 @@ export function TerminalPanel(props: { sessionId: number | null }) {
     <div className="relative h-full w-full">
       <div ref={containerRef} className="h-full w-full" />
       {props.sessionId == null && (
-        <div className="absolute inset-0 flex items-center justify-center text-zinc-500">
+        <div className="absolute inset-0 flex items-center justify-center opacity-55">
           select or create a session
         </div>
       )}

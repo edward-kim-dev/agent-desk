@@ -12,7 +12,7 @@ export function AdaptersSubview() {
       {ADAPTERS.map((a) => (
         <article key={a.name} className="rounded border p-3">
           <h3 className="font-semibold">{a.name}</h3>
-          <div className="mt-1 text-xs text-zinc-500">Export target</div>
+          <div className="mt-1 text-xs opacity-55">Export target</div>
           <div className="font-mono text-xs">{a.target}</div>
           <button disabled className="mt-3 rounded border px-2 py-1 text-xs">
             Export

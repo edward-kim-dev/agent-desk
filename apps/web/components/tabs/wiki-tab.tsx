@@ -4,7 +4,7 @@ import { WikiTree, type WikiNode } from "../wiki-tree";
 import { WikiViewer } from "../wiki-viewer";
 import { WikiEditor } from "../wiki-editor";
 import { WikiLogComposer } from "../wiki-log-composer";
-import { WikiSubviewSwitch, type WikiSubview } from "./wiki/subview-switch";
+import type { WikiSubview } from "./wiki/subview-switch";
 import { WikiMetaPanel } from "./wiki/meta-panel";
 import { AdrBoard } from "./wiki/adr-board";
 import { ReviewQueue } from "./wiki/review-queue";
@@ -41,8 +41,12 @@ function brokenLinksOf(content: string, known: Set<string>): string[] {
     .filter((t) => !known.has(t.replace(/^\.?\//, "")));
 }
 
-export function WikiTab(props: { workspaceId: number | null }) {
-  const [subview, setSubview] = useState<WikiSubview>("docs");
+export function WikiTab(props: {
+  workspaceId: number | null;
+  subview: WikiSubview;
+  onSubviewChange: (next: WikiSubview) => void;
+}) {
+  const { subview, onSubviewChange } = props;
   const [tree, setTree] = useState<WikiNode | null>(null);
   const [openFile, setOpenFile] = useState<WikiFile | null>(null);
   const [reviewBody, setReviewBody] = useState<string | null>(null);
@@ -86,10 +90,10 @@ export function WikiTab(props: { workspaceId: number | null }) {
       );
       if (res.ok) {
         setOpenFile(await res.json());
-        if (subview !== "docs") setSubview("docs");
+        if (subview !== "docs") onSubviewChange("docs");
       }
     },
-    [props.workspaceId, subview]
+    [props.workspaceId, subview, onSubviewChange]
   );
 
   const known = useMemo(() => {
@@ -105,25 +109,24 @@ export function WikiTab(props: { workspaceId: number | null }) {
 
   if (props.workspaceId == null) {
     return (
-      <div className="grid h-full place-items-center text-sm text-zinc-500">
+      <div className="grid h-full place-items-center text-sm opacity-55">
         no workspace selected
       </div>
     );
   }
   if (!tree) {
     return (
-      <div className="grid h-full place-items-center text-sm text-zinc-500">
+      <div className="grid h-full place-items-center text-sm opacity-55">
         no wiki/ in workspace
       </div>
     );
   }
 
   return (
-    <div className="grid h-full grid-rows-[auto_1fr]">
-      <WikiSubviewSwitch value={subview} onChange={setSubview} />
+    <div className="h-full min-h-0">
       {subview === "docs" && (
         <div className="grid min-h-0 grid-cols-[16rem_1fr_18rem]">
-          <aside className="overflow-y-auto border-r p-3 text-sm">
+          <aside className="overflow-y-auto border-r border-[var(--hill-rule)] p-3 text-sm">
             <ul>
               <WikiTree node={tree} onOpen={open} />
             </ul>
@@ -138,7 +141,7 @@ export function WikiTab(props: { workspaceId: number | null }) {
                   brokenLinks={brokenLinks}
                 />
                 <details className="mt-3">
-                  <summary className="cursor-pointer text-xs text-zinc-500">edit</summary>
+                  <summary className="cursor-pointer text-xs opacity-55">edit</summary>
                   <WikiEditor
                     initialContent={openFile.content}
                     onSave={async (next) => {
@@ -164,7 +167,7 @@ export function WikiTab(props: { workspaceId: number | null }) {
                 </details>
               </>
             ) : (
-              <div className="text-zinc-500">왼쪽 트리에서 문서를 선택하세요.</div>
+              <div className="opacity-55">왼쪽 트리에서 문서를 선택하세요.</div>
             )}
           </section>
           <WikiMetaPanel

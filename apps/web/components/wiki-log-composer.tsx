@@ -33,7 +33,7 @@ export function WikiLogComposer(props: { workspaceId: number }) {
       />
       <div className="flex items-center gap-2">
         <button className="rounded border px-2 py-1 text-sm">post</button>
-        {status && <span className="text-xs text-zinc-500">{status}</span>}
+        {status && <span className="text-xs opacity-55">{status}</span>}
       </div>
     </form>
   );

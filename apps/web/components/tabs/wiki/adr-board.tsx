@@ -24,14 +24,14 @@ export function AdrBoard(props: {
   const files = findDecisions(props.tree);
   if (files.length === 0) {
     return (
-      <div className="p-4 text-sm text-zinc-500">
+      <div className="p-4 text-sm opacity-55">
         wiki/decisions 가 비어 있습니다.
       </div>
     );
   }
   return (
     <table className="w-full text-sm">
-      <thead className="border-b text-left text-xs uppercase text-zinc-500">
+      <thead className="border-b border-[var(--hill-rule)] text-left text-xs uppercase opacity-55">
         <tr>
           <th className="px-3 py-2">파일</th>
           <th className="px-3 py-2">상태</th>
@@ -42,12 +42,12 @@ export function AdrBoard(props: {
         {files.map((f) => (
           <tr
             key={f.path}
-            className="cursor-pointer border-b hover:bg-zinc-50 dark:hover:bg-zinc-900"
+            className="cursor-pointer border-b border-[var(--hill-rule)] hover:bg-[#1a1208]/[0.04]"
             onClick={() => props.onOpen(f.path)}
           >
             <td className="px-3 py-2 font-mono">{f.name}</td>
-            <td className="px-3 py-2 text-zinc-500">—</td>
-            <td className="px-3 py-2 text-zinc-500">—</td>
+            <td className="px-3 py-2 opacity-55">—</td>
+            <td className="px-3 py-2 opacity-55">—</td>
           </tr>
         ))}
       </tbody>

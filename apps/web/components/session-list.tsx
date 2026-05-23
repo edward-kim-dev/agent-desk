@@ -13,7 +13,7 @@ export function SessionList(props: {
     .filter((s) => props.activeWorkspaceId == null || s.workspaceId === props.activeWorkspaceId);
 
   if (scoped.length === 0) {
-    return <div className="text-xs text-zinc-500">no active sessions</div>;
+    return <div className="text-xs opacity-55">no active sessions</div>;
   }
 
   return (
@@ -21,8 +21,8 @@ export function SessionList(props: {
       {scoped.map((s) => (
         <li
           key={s.id}
-          className={`flex items-center justify-between rounded px-2 py-1 text-sm ${
-            props.selectedId === s.id ? "bg-zinc-200 dark:bg-zinc-800" : ""
+          className={`flex items-center justify-between px-2 py-1 text-sm ${
+            props.selectedId === s.id ? "bg-[#1a1208]/[0.08]" : ""
           }`}
         >
           <button
@@ -31,7 +31,7 @@ export function SessionList(props: {
             title={`${s.cli ?? "?"} • ${s.attachedClients} client(s)`}
           >
             <span className="font-mono">{s.tmuxName}</span>
-            <span className="ml-2 text-xs text-zinc-500">
+            <span className="ml-2 text-xs opacity-55">
               {s.cli}
               {s.adopted ? " (adopted)" : ""}
             </span>

@@ -29,12 +29,12 @@ export function WikiTree(props: { node: WikiNode; onOpen: (path: string) => void
         <summary className="cursor-pointer text-sm font-medium">
           {props.node.name}
           {layerLabel && (
-            <span className="ml-2 rounded bg-zinc-200 px-1 text-xs text-zinc-700 dark:bg-zinc-700 dark:text-zinc-200">
+            <span className="ml-2 bg-[#1a1208]/[0.08] px-1 text-xs opacity-75">
               {layerLabel}
             </span>
           )}
         </summary>
-        <ul className="ml-4 mt-1 flex flex-col gap-1 border-l pl-2">
+        <ul className="ml-4 mt-1 flex flex-col gap-1 border-l border-[var(--hill-rule)] pl-2">
           {(props.node.children ?? []).map((c) => (
             <WikiTree key={c.path} node={c} onOpen={props.onOpen} />
           ))}

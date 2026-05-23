@@ -29,9 +29,9 @@ export function TerminalTab(props: {
 
   return (
     <div className="grid h-full grid-cols-[18rem_1fr]">
-      <aside className="flex min-w-0 flex-col gap-3 overflow-y-auto border-r p-3">
+      <aside className="flex min-w-0 flex-col gap-3 overflow-y-auto border-r border-[var(--hill-rule)] p-3">
         <WorkspaceForm onCreated={props.onWorkspacesChanged} />
-        <section className="mt-2 flex items-center justify-between text-xs uppercase text-zinc-500">
+        <section className="mt-2 flex items-center justify-between text-xs uppercase opacity-55">
           sessions
           {props.activeWorkspaceId != null && (
             <NewSessionDialog
@@ -51,7 +51,7 @@ export function TerminalTab(props: {
           }}
         />
       </aside>
-      <section className="bg-black text-zinc-100">
+      <section className="overflow-hidden">
         <TerminalPanel sessionId={selectedSessionId} />
       </section>
     </div>

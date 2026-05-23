@@ -1,20 +1,35 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import type { WorkspaceDto } from "@agent-desk/shared";
 import { gateway } from "@/lib/gateway-client";
-import { WorkspaceSwitcher } from "./workspace-switcher";
-import { TabBar } from "./tabs/tab-bar";
+import { AppHeader } from "./app-header";
 import type { TabKey } from "./tabs/types";
+import { HomeTab } from "./tabs/home-tab";
 import { TerminalTab } from "./tabs/terminal-tab";
 import { WikiTab } from "./tabs/wiki-tab";
 import { GraphTab } from "./tabs/graph-tab";
 import { HarnessTab } from "./tabs/harness-tab";
 import { SettingsTab } from "./tabs/settings-tab";
+import {
+  WikiSubviewSwitch,
+  type WikiSubview,
+} from "./tabs/wiki/subview-switch";
+import {
+  HarnessSubviewSwitch,
+  type HarnessSubview,
+} from "./tabs/harness/subview-switch";
+import {
+  SettingsSubviewSwitch,
+  type SettingsSubview,
+} from "./tabs/settings/subview-switch";
 
 export function AppShell() {
   const [workspaces, setWorkspaces] = useState<WorkspaceDto[]>([]);
   const [activeId, setActiveId] = useState<number | null>(null);
-  const [tab, setTab] = useState<TabKey>("terminal");
+  const [tab, setTab] = useState<TabKey>("home");
+  const [wikiSubview, setWikiSubview] = useState<WikiSubview>("docs");
+  const [harnessSubview, setHarnessSubview] = useState<HarnessSubview>("memory");
+  const [settingsSubview, setSettingsSubview] = useState<SettingsSubview>("general");
 
   const refresh = useCallback(async () => {
     const { workspaces } = await gateway.workspaces.list();
@@ -26,33 +41,60 @@ export function AppShell() {
     refresh();
   }, [refresh]);
 
+  let subviewSlot: ReactNode = null;
+  if (tab === "wiki") {
+    subviewSlot = (
+      <WikiSubviewSwitch value={wikiSubview} onChange={setWikiSubview} />
+    );
+  } else if (tab === "harness") {
+    subviewSlot = (
+      <HarnessSubviewSwitch
+        value={harnessSubview}
+        onChange={setHarnessSubview}
+      />
+    );
+  } else if (tab === "settings") {
+    subviewSlot = (
+      <SettingsSubviewSwitch
+        value={settingsSubview}
+        onChange={setSettingsSubview}
+      />
+    );
+  }
+
   return (
-    <div className="grid h-screen grid-rows-[auto_auto_1fr]">
-      <header className="flex items-center gap-4 border-b px-4 py-2">
-        <h1 className="font-semibold">agent-desk</h1>
-        <WorkspaceSwitcher
-          workspaces={workspaces}
-          activeId={activeId}
-          onSelect={setActiveId}
-        />
-        <div className="flex-1" />
-        <span aria-hidden className="text-xs text-zinc-400" data-stub="true">
-          !0
-        </span>
-        <span className="text-xs text-zinc-500">v0.2</span>
-      </header>
-      <TabBar value={tab} onChange={setTab} />
-      <main className="min-h-0 overflow-hidden">
+    <div
+      className={[
+        "mx-auto flex h-screen flex-col",
+        "max-w-[1180px] px-[2.5vw] pt-[1.9vw] pb-[4.2vw]",
+      ].join(" ")}
+    >
+      <AppHeader
+        workspaces={workspaces}
+        activeId={activeId}
+        onSelectWorkspace={setActiveId}
+        tab={tab}
+        onTabChange={setTab}
+        subviewSlot={subviewSlot}
+      />
+      <main className="min-h-0 flex-1 overflow-hidden">
+        {tab === "home" && <HomeTab />}
         {tab === "terminal" && (
           <TerminalTab
             activeWorkspaceId={activeId}
             onWorkspacesChanged={refresh}
           />
         )}
-        {tab === "wiki" && <WikiTab workspaceId={activeId} />}
+        {tab === "wiki" && (
+          <WikiTab
+            workspaceId={activeId}
+            subview={wikiSubview}
+            onSubviewChange={setWikiSubview}
+          />
+        )}
         {tab === "graph" && <GraphTab />}
-        {tab === "harness" && <HarnessTab />}
-        {tab === "settings" && <SettingsTab />}
+        {tab === "harness" && <HarnessTab subview={harnessSubview} />}
+        {tab === "settings" && <SettingsTab subview={settingsSubview} />}
       </main>
     </div>
   );

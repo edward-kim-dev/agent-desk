@@ -11,12 +11,12 @@ export function WikiViewer(props: {
   const fm = matter(props.content);
   const html = marked.parse(fm.content, { breaks: true }) as string;
   return (
-    <article className="prose prose-sm max-w-none dark:prose-invert">
-      <div className="mb-3 rounded border bg-zinc-100 p-2 text-xs dark:bg-zinc-900">
+    <article className="prose prose-sm max-w-none">
+      <div className="mb-3 border border-[var(--hill-rule)] bg-[#1a1208]/[0.04] p-2 text-xs">
         <div className="font-mono">{props.path}</div>
         <div className="mt-1 flex flex-wrap gap-2">
           {Object.entries(fm.data).map(([k, v]) => (
-            <span key={k} className="rounded bg-zinc-200 px-1 dark:bg-zinc-800">
+            <span key={k} className="bg-[#1a1208]/[0.08] px-1">
               {k}: {String(v)}
             </span>
           ))}

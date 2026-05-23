@@ -52,7 +52,7 @@ export function WikiEditor(props: {
         >
           save
         </button>
-        {status && <span className="text-xs text-zinc-500">{status}</span>}
+        {status && <span className="text-xs opacity-55">{status}</span>}
       </div>
       {warnings.length > 0 && (
         <ul className="text-xs text-amber-700">
