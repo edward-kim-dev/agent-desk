@@ -14,9 +14,12 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
+type AbortOptions = { signal?: AbortSignal };
+
 export const gateway = {
   workspaces: {
-    list: () => call<{ workspaces: WorkspaceDto[] }>(`workspaces`),
+    list: (opts?: AbortOptions) =>
+      call<{ workspaces: WorkspaceDto[] }>(`workspaces`, opts),
     create: (input: CreateWorkspaceRequest) =>
       call<WorkspaceDto>(`workspaces`, {
         method: "POST",
@@ -24,7 +27,8 @@ export const gateway = {
       }),
   },
   sessions: {
-    list: () => call<{ sessions: SessionDto[] }>(`sessions`),
+    list: (opts?: AbortOptions) =>
+      call<{ sessions: SessionDto[] }>(`sessions`, opts),
     create: (input: CreateSessionRequest) =>
       call<SessionDto>(`sessions`, {
         method: "POST",

@@ -31,14 +31,22 @@ export function AppShell() {
   const [harnessSubview, setHarnessSubview] = useState<HarnessSubview>("memory");
   const [settingsSubview, setSettingsSubview] = useState<SettingsSubview>("general");
 
-  const refresh = useCallback(async () => {
-    const { workspaces } = await gateway.workspaces.list();
-    setWorkspaces(workspaces);
-    if (workspaces.length > 0 && activeId == null) setActiveId(workspaces[0].id);
+  const refresh = useCallback(async (signal?: AbortSignal) => {
+    try {
+      const { workspaces } = await gateway.workspaces.list({ signal });
+      if (signal?.aborted) return;
+      setWorkspaces(workspaces);
+      if (workspaces.length > 0 && activeId == null) setActiveId(workspaces[0].id);
+    } catch (e) {
+      if ((e as { name?: string }).name === "AbortError") return;
+      throw e;
+    }
   }, [activeId]);
 
   useEffect(() => {
-    refresh();
+    const controller = new AbortController();
+    void refresh(controller.signal);
+    return () => controller.abort();
   }, [refresh]);
 
   let subviewSlot: ReactNode = null;

@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { SessionDto } from "@agent-desk/shared";
 import { gateway } from "@/lib/gateway-client";
 import { WorkspaceForm } from "../workspace-form";
@@ -7,25 +7,59 @@ import { SessionList } from "../session-list";
 import { NewSessionDialog } from "../new-session-dialog";
 import { TerminalPanel } from "../terminal-panel";
 
+const POLL_INTERVAL_MS = 3000;
+
 export function TerminalTab(props: {
   activeWorkspaceId: number | null;
   onWorkspacesChanged: () => void;
 }) {
   const [sessions, setSessions] = useState<SessionDto[]>([]);
   const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null);
+  const stoppedRef = useRef(false);
+  const inFlightRef = useRef<AbortController | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const refreshSessions = useCallback(async () => {
+  const fetchOnce = useCallback(async () => {
+    inFlightRef.current?.abort();
+    const controller = new AbortController();
+    inFlightRef.current = controller;
     try {
-      const { sessions } = await gateway.sessions.list();
-      setSessions(sessions);
-    } catch {}
+      const { sessions } = await gateway.sessions.list({
+        signal: controller.signal,
+      });
+      if (!stoppedRef.current && !controller.signal.aborted) {
+        setSessions(sessions);
+      }
+    } catch (e) {
+      if ((e as { name?: string }).name === "AbortError") return;
+    } finally {
+      if (inFlightRef.current === controller) inFlightRef.current = null;
+    }
   }, []);
 
+  const refreshSessions = useCallback(() => {
+    void fetchOnce();
+  }, [fetchOnce]);
+
   useEffect(() => {
-    refreshSessions();
-    const t = setInterval(refreshSessions, 3000);
-    return () => clearInterval(t);
-  }, [refreshSessions]);
+    stoppedRef.current = false;
+    const tick = async () => {
+      await fetchOnce();
+      if (!stoppedRef.current) {
+        timerRef.current = setTimeout(tick, POLL_INTERVAL_MS);
+      }
+    };
+    void tick();
+    return () => {
+      stoppedRef.current = true;
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+      inFlightRef.current?.abort();
+      inFlightRef.current = null;
+    };
+  }, [fetchOnce]);
 
   return (
     <div className="grid h-full grid-cols-[18rem_1fr]">
