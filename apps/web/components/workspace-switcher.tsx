@@ -22,7 +22,12 @@ export function WorkspaceSwitcher(props: {
   const active = props.workspaces.find((w) => w.id === props.activeId);
   if (props.workspaces.length === 0) {
     return (
-      <div className="text-[10px] uppercase tracking-[0.24em] opacity-45">
+      <div
+        className={[
+          "text-[10px] uppercase tracking-[0.24em] opacity-45",
+          "border-t-2 border-x-0 border-b-0 border-transparent pt-2 pb-0 px-0",
+        ].join(" ")}
+      >
         no workspace yet
       </div>
     );
