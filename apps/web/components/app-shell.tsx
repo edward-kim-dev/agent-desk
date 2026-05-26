@@ -22,6 +22,7 @@ import {
   SettingsSubviewSwitch,
   type SettingsSubview,
 } from "./tabs/settings/subview-switch";
+import { TerminalSubviewSwitch } from "./tabs/terminal/subview-switch";
 
 export function AppShell() {
   const [workspaces, setWorkspaces] = useState<WorkspaceDto[]>([]);
@@ -30,6 +31,7 @@ export function AppShell() {
   const [wikiSubview, setWikiSubview] = useState<WikiSubview>("docs");
   const [harnessSubview, setHarnessSubview] = useState<HarnessSubview>("memory");
   const [settingsSubview, setSettingsSubview] = useState<SettingsSubview>("general");
+  const [terminalSessionsOpen, setTerminalSessionsOpen] = useState(true);
 
   const refresh = useCallback(async (signal?: AbortSignal) => {
     try {
@@ -71,6 +73,13 @@ export function AppShell() {
         onChange={setSettingsSubview}
       />
     );
+  } else if (tab === "terminal") {
+    subviewSlot = (
+      <TerminalSubviewSwitch
+        sessionsOpen={terminalSessionsOpen}
+        onToggleSessions={() => setTerminalSessionsOpen((v) => !v)}
+      />
+    );
   }
 
   return (
@@ -91,7 +100,10 @@ export function AppShell() {
       <main className="min-h-0 flex-1 overflow-hidden">
         {tab === "home" && <HomeTab />}
         {tab === "terminal" && (
-          <TerminalTab activeWorkspaceId={activeId} />
+          <TerminalTab
+            activeWorkspaceId={activeId}
+            sessionsOpen={terminalSessionsOpen}
+          />
         )}
         {tab === "wiki" && (
           <WikiTab

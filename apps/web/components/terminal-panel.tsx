@@ -5,9 +5,25 @@ import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
 import "@xterm/xterm/css/xterm.css";
-import { useTerminalSocket } from "@/hooks/use-terminal-socket";
+import {
+  useTerminalSocket,
+  type TerminalSocketCloseReason,
+} from "@/hooks/use-terminal-socket";
 
 const HIJACK_KEYS = new Set(["w", "t", "n"]);
+
+function closeMessage(reason: TerminalSocketCloseReason): string {
+  switch (reason.kind) {
+    case "ended":
+      return "\r\n[session ended]";
+    case "not_found":
+      return "\r\n[session no longer exists]";
+    case "unauthorized":
+      return "\r\n[unauthorized — token rejected]";
+    case "transient":
+      return `\r\n[disconnected, retrying in ${Math.round(reason.willRetryInMs / 100) / 10}s…]`;
+  }
+}
 
 export function TerminalPanel(props: { sessionId: number | null }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -17,7 +33,8 @@ export function TerminalPanel(props: { sessionId: number | null }) {
   const handlers = useMemo(
     () => ({
       onData: (chunk: string) => termRef.current?.write(chunk),
-      onClose: () => termRef.current?.writeln("\r\n[disconnected, reconnecting…]"),
+      onClose: (reason: TerminalSocketCloseReason) =>
+        termRef.current?.writeln(closeMessage(reason)),
     }),
     []
   );

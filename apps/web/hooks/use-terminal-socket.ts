@@ -1,9 +1,24 @@
 "use client";
 import { useCallback, useEffect, useRef } from "react";
 
+export type TerminalSocketCloseReason =
+  | { kind: "ended" }
+  | { kind: "not_found" }
+  | { kind: "unauthorized" }
+  | { kind: "transient"; willRetryInMs: number };
+
 export interface TerminalSocketHandlers {
   onData: (chunk: string) => void;
-  onClose: () => void;
+  onClose: (reason: TerminalSocketCloseReason) => void;
+}
+
+const TERMINAL_CLOSE_CODES = new Set([1000, 4401, 4404]);
+
+function reasonForCode(code: number): TerminalSocketCloseReason | null {
+  if (code === 4404) return { kind: "not_found" };
+  if (code === 4401) return { kind: "unauthorized" };
+  if (code === 1000) return { kind: "ended" };
+  return null;
 }
 
 export function useTerminalSocket(
@@ -33,10 +48,16 @@ export function useTerminalSocket(
         ws.send(JSON.stringify({ type: "resize", cols: cc, rows: rr }));
       };
       ws.onmessage = (ev) => handlers.onData(typeof ev.data === "string" ? ev.data : "");
-      ws.onclose = () => {
-        handlers.onClose();
+      ws.onclose = (ev) => {
         if (stopped) return;
+        const terminal = TERMINAL_CLOSE_CODES.has(ev.code);
+        if (terminal) {
+          stopped = true;
+          handlers.onClose(reasonForCode(ev.code) ?? { kind: "ended" });
+          return;
+        }
         const delay = Math.min(5000, 250 * 2 ** reconnectAttempt.current++);
+        handlers.onClose({ kind: "transient", willRetryInMs: delay });
         setTimeout(connect, delay);
       };
     };

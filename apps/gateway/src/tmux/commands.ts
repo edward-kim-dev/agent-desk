@@ -83,7 +83,11 @@ export function createTmuxClient(opts: { exec?: ExecLike } = {}): TmuxClient {
 
   async function newSession(input: NewSessionInput): Promise<void> {
     const unsetPrefix = DEBUG_ENV_KEYS.map((k) => `-u ${k}`).join(" ");
-    const wrapped = `env ${unsetPrefix} ${input.command}`;
+    // Keep the tmux session alive after the CLI exits so the user can see
+    // failure output (e.g. "command not found"). Without this wrap, a fast
+    // CLI exit kills the tmux session immediately and the UI shows only a
+    // silent reconnect loop.
+    const wrapped = `env ${unsetPrefix} ${input.command}; ec=$?; printf '\\n[CLI exited (%d). Press Ctrl-D to close the session.]\\n' "$ec"; exec "${'$'}{SHELL:-/bin/bash}"`;
     await exec("tmux", [
       "new-session",
       "-d",

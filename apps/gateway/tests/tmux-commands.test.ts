@@ -52,17 +52,36 @@ describe("tmuxClient", () => {
     expect(await client.listSessions()).toEqual([]);
   });
 
-  it("cwd와 command를 지정해 detached 세션을 생성한다", async () => {
-    const exec = mockExec({
-      "tmux new-session -d -s ad-owngo-aaa111 -c /workspaces/owngo claude":
-        { stdout: "" },
-    });
+  it("cwd와 command를 지정해 detached 세션을 생성하고, CLI 종료 후에도 셸이 살아남도록 래핑한다", async () => {
+    const calls: { cmd: string; args: string[] }[] = [];
+    const exec: ExecLike = vi.fn(async (cmd: string, args: string[]) => {
+      calls.push({ cmd, args });
+      return { stdout: "", stderr: "" };
+    }) as unknown as ExecLike;
     const client = createTmuxClient({ exec });
     await client.newSession({
       name: "ad-owngo-aaa111",
       cwd: "/workspaces/owngo",
       command: "claude",
     });
+    expect(calls).toHaveLength(1);
+    expect(calls[0].cmd).toBe("tmux");
+    expect(calls[0].args.slice(0, 6)).toEqual([
+      "new-session",
+      "-d",
+      "-s",
+      "ad-owngo-aaa111",
+      "-c",
+      "/workspaces/owngo",
+    ]);
+    const wrapped = calls[0].args[6];
+    // debug env vars must be unset
+    expect(wrapped).toMatch(/^env -u NODE_OPTIONS -u NODE_INSPECT_PUBLISH_UID -u VSCODE_INSPECTOR_OPTIONS claude;/);
+    // exit guard keeps the session alive
+    expect(wrapped).toContain("ec=$?");
+    expect(wrapped).toContain("CLI exited");
+    expect(wrapped).toContain("exec ");
+    expect(wrapped).toContain("${SHELL:-/bin/bash}");
   });
 
   it("이름으로 세션을 종료한다", async () => {
