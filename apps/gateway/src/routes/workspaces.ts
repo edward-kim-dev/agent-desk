@@ -10,12 +10,16 @@ import {
 } from "@agent-desk/shared";
 import type { DbHandle } from "../db";
 import type { TmuxClient } from "../tmux/commands";
+import { ensureAllSkillsInstalled } from "../skills/install";
 
 export function workspaceRoutes(opts: {
   db: DbHandle["db"];
   tmux: TmuxClient;
+  /** Override skills bulk-installer for tests. */
+  ensureAllSkillsFn?: typeof ensureAllSkillsInstalled;
 }): Hono {
   const { db, tmux } = opts;
+  const ensureAllSkills = opts.ensureAllSkillsFn ?? ensureAllSkillsInstalled;
   const r = new Hono();
 
   r.get("/", (c) => {
@@ -56,6 +60,13 @@ export function workspaceRoutes(opts: {
       })
       .returning()
       .all();
+    // vendor/superpowers 의 스킬 전체를 workspace/.claude/skills/ 로 symlink.
+    // 실패해도 워크스페이스 생성 자체는 막지 않는다 (사용자가 수동으로 복구 가능).
+    try {
+      await ensureAllSkills({ workspacePath: inserted[0].path });
+    } catch (err) {
+      console.warn("[workspaces] skill install on create failed:", err);
+    }
     return c.json(inserted[0], 201);
   });
 

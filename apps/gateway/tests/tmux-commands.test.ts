@@ -91,4 +91,68 @@ describe("tmuxClient", () => {
     const client = createTmuxClient({ exec });
     await client.killSession("ad-foo");
   });
+
+  it("sendKeys 는 -- 구분자를 써서 leading-dash 텍스트를 안전하게 전달한다", async () => {
+    const exec = mockExec({
+      "tmux send-keys -t ad-foo -- -hello Enter": { stdout: "" },
+      "tmux send-keys -t ad-foo -- ping": { stdout: "" },
+    });
+    const client = createTmuxClient({ exec });
+    await client.sendKeys("ad-foo", "-hello", true);
+    await client.sendKeys("ad-foo", "ping", false);
+  });
+
+  it("capturePane 은 -p 로 텍스트 덤프를 받는다", async () => {
+    const exec = mockExec({
+      "tmux capture-pane -p -t ad-foo": { stdout: "line1\nline2\n" },
+    });
+    const client = createTmuxClient({ exec });
+    expect(await client.capturePane("ad-foo")).toBe("line1\nline2\n");
+  });
+
+  it("paneChildren 은 pane_pid 의 직접 자식 comm 목록을 반환", async () => {
+    const calls: { cmd: string; args: string[] }[] = [];
+    const exec: ExecLike = vi.fn(async (cmd: string, args: string[]) => {
+      calls.push({ cmd, args });
+      if (cmd === "tmux") return { stdout: "10505\n", stderr: "" };
+      if (cmd === "ps") return { stdout: "claude\nnode\n", stderr: "" };
+      throw new Error(`unexpected: ${cmd}`);
+    }) as unknown as ExecLike;
+    const client = createTmuxClient({ exec });
+    const kids = await client.paneChildren("ad-foo");
+    expect(kids).toEqual(["claude", "node"]);
+    expect(calls[0]).toEqual({
+      cmd: "tmux",
+      args: ["list-panes", "-t", "ad-foo", "-F", "#{pane_pid}"],
+    });
+    expect(calls[1]).toEqual({
+      cmd: "ps",
+      args: ["--ppid", "10505", "-o", "comm="],
+    });
+  });
+
+  it("paneChildren 은 ps 실패 시 빈 배열을 반환한다", async () => {
+    const exec: ExecLike = vi.fn(async (cmd: string) => {
+      if (cmd === "tmux") return { stdout: "10505\n", stderr: "" };
+      throw new Error("ps not found");
+    }) as unknown as ExecLike;
+    expect(await createTmuxClient({ exec }).paneChildren("ad-foo")).toEqual([]);
+  });
+
+  it("paneCurrentCommand 는 첫 pane 의 foreground 명령을 반환, 에러시 null", async () => {
+    const okExec = mockExec({
+      "tmux list-panes -t ad-foo -F #{pane_current_command}": {
+        stdout: "claude\n",
+      },
+    });
+    expect(await createTmuxClient({ exec: okExec }).paneCurrentCommand("ad-foo"))
+      .toBe("claude");
+
+    const errExec = vi.fn(async () => {
+      throw new Error("no such session");
+    }) as unknown as ExecLike;
+    expect(
+      await createTmuxClient({ exec: errExec }).paneCurrentCommand("ad-foo"),
+    ).toBeNull();
+  });
 });

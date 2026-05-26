@@ -18,6 +18,7 @@ export const sessions = sqliteTable("sessions", {
   lastActivityAt: integer("last_activity_at").notNull(),
   createdAt: integer("created_at").notNull(),
   adopted: integer("adopted").notNull().default(0),
+  briefedAt: integer("briefed_at"),
 });
 
 export const sessionEvents = sqliteTable("session_events", {
@@ -26,7 +27,15 @@ export const sessionEvents = sqliteTable("session_events", {
     .notNull()
     .references(() => sessions.id),
   kind: text("kind", {
-    enum: ["created", "attached", "detached", "killed", "adopted"],
+    enum: [
+      "created",
+      "attached",
+      "detached",
+      "killed",
+      "adopted",
+      "briefed",
+      "brief-failed",
+    ],
   }).notNull(),
   payloadJson: text("payload_json"),
   at: integer("at").notNull(),

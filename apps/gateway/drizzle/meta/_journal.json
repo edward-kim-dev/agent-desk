@@ -15,6 +15,13 @@
       "when": 1779626901704,
       "tag": "0001_adorable_rafael_vega",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1779775260841,
+      "tag": "0002_windy_vulture",
+      "breakpoints": true
     }
   ]
 }

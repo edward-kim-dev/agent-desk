@@ -39,6 +39,11 @@ export interface TmuxClient {
   newSession(input: NewSessionInput): Promise<void>;
   killSession(name: string): Promise<void>;
   hasSession(name: string): Promise<boolean>;
+  sendKeys(name: string, text: string, withEnter: boolean): Promise<void>;
+  capturePane(name: string): Promise<string>;
+  paneCurrentCommand(name: string): Promise<string | null>;
+  /** Immediate children (comm names) of the pane's leading process. */
+  paneChildren(name: string): Promise<string[]>;
 }
 
 const LIST_FORMAT =
@@ -112,5 +117,64 @@ export function createTmuxClient(opts: { exec?: ExecLike } = {}): TmuxClient {
     }
   }
 
-  return { listSessions, newSession, killSession, hasSession };
+  async function sendKeys(name: string, text: string, withEnter: boolean): Promise<void> {
+    const args = ["send-keys", "-t", name, "--", text];
+    if (withEnter) args.push("Enter");
+    await exec("tmux", args);
+  }
+
+  async function capturePane(name: string): Promise<string> {
+    const { stdout } = await exec("tmux", ["capture-pane", "-p", "-t", name]);
+    return stdout;
+  }
+
+  async function paneCurrentCommand(name: string): Promise<string | null> {
+    try {
+      const { stdout } = await exec("tmux", [
+        "list-panes",
+        "-t",
+        name,
+        "-F",
+        "#{pane_current_command}",
+      ]);
+      const cmd = stdout.split("\n")[0]?.trim();
+      return cmd ? cmd : null;
+    } catch {
+      return null;
+    }
+  }
+
+  async function paneChildren(name: string): Promise<string[]> {
+    try {
+      const { stdout: pidOut } = await exec("tmux", [
+        "list-panes",
+        "-t",
+        name,
+        "-F",
+        "#{pane_pid}",
+      ]);
+      const pid = pidOut.split("\n")[0]?.trim();
+      if (!pid) return [];
+      // Linux: ps --ppid <pid> -o comm=  → 직접 자식들의 comm.
+      // Wrap shell 아래 실제 CLI 가 살아 있을 때 이 목록에 나타남.
+      const { stdout } = await exec("ps", ["--ppid", pid, "-o", "comm="]);
+      return stdout
+        .split("\n")
+        .map((s) => s.trim())
+        .filter(Boolean);
+    } catch {
+      return [];
+    }
+  }
+
+  return {
+    listSessions,
+    newSession,
+    killSession,
+    hasSession,
+    sendKeys,
+    capturePane,
+    paneCurrentCommand,
+    paneChildren,
+  };
 }

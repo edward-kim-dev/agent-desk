@@ -38,6 +38,8 @@ beforeAll(async () => {
     cli: [],
     bind: "127.0.0.1",
     port: 0,
+    ensureAllSkillsFn: async () => ({ results: [] }),
+    installSkillsOnStartup: false,
   });
   url = built.url;
   stop = built.close;

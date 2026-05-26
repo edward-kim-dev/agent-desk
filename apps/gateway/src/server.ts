@@ -12,6 +12,13 @@ import { createTmuxClient, type TmuxClient } from "./tmux/commands";
 import { attachWsServer } from "./ws/attach-server";
 import { startDiscoveryLoop } from "./tmux/discover";
 import { startNightlyCleanupLoop } from "./jobs/nightly-cleanup";
+import type { injectPrompt } from "./tmux/inject";
+import {
+  ensureAllSkillsInstalled,
+  type ensureSkillInstalled,
+} from "./skills/install";
+import { isNull } from "drizzle-orm";
+import { workspaces as workspacesTable } from "@agent-desk/shared/db/schema";
 
 export interface CreateServerOptions {
   db: DbHandle;
@@ -21,6 +28,14 @@ export interface CreateServerOptions {
   port: number;
   tmux?: TmuxClient;
   startBackgroundJobs?: boolean;
+  /** Override the prompt-injection runner. Tests use this to bypass real tmux. */
+  injectFn?: typeof injectPrompt;
+  /** Override skill installer. Tests use this to bypass filesystem. */
+  ensureSkillFn?: typeof ensureSkillInstalled;
+  /** Override bulk skill installer. Tests use this to bypass filesystem. */
+  ensureAllSkillsFn?: typeof ensureAllSkillsInstalled;
+  /** Skip the boot-time bulk skill install. Defaults to running. */
+  installSkillsOnStartup?: boolean;
 }
 
 export interface RunningServer {
@@ -41,9 +56,40 @@ export async function createServer(
   const api = new Hono();
   api.use("*", bearerAuth(opts.token));
   api.get("/cli", (c) => c.json({ cli: opts.cli }));
-  api.route("/workspaces", workspaceRoutes({ db: opts.db.db, tmux }));
+  const ensureAllSkills = opts.ensureAllSkillsFn ?? ensureAllSkillsInstalled;
+  api.route(
+    "/workspaces",
+    workspaceRoutes({ db: opts.db.db, tmux, ensureAllSkillsFn: ensureAllSkills }),
+  );
+  // 활성 워크스페이스에 vendored 스킬을 일괄 symlink (idempotent).
+  // 기동을 지연시키지 않도록 background 로 디스패치.
+  if (opts.installSkillsOnStartup !== false) {
+    void (async () => {
+      const rows = opts.db.db
+        .select({ path: workspacesTable.path })
+        .from(workspacesTable)
+        .where(isNull(workspacesTable.deletedAt))
+        .all();
+      for (const ws of rows) {
+        try {
+          await ensureAllSkills({ workspacePath: ws.path });
+        } catch (err) {
+          console.warn("[startup] skill install failed for", ws.path, err);
+        }
+      }
+    })();
+  }
   api.route("/workspaces", wikiRoutes(opts.db.db));
-  api.route("/sessions", sessionRoutes({ db: opts.db.db, tmux, cli: opts.cli }));
+  api.route(
+    "/sessions",
+    sessionRoutes({
+      db: opts.db.db,
+      tmux,
+      cli: opts.cli,
+      injectFn: opts.injectFn,
+      ensureSkillFn: opts.ensureSkillFn,
+    }),
+  );
   app.route("/", api);
 
   const server = await new Promise<ServerType>((resolve) => {

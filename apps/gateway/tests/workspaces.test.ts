@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createServer } from "../src/server";
 import { openDatabase, type DbHandle } from "../src/db";
-import { sessions } from "@agent-desk/shared/db/schema";
+import { sessions, workspaces } from "@agent-desk/shared/db/schema";
 
 let dir: string;
 let handle: DbHandle;
@@ -13,6 +13,7 @@ let stop: () => Promise<void>;
 const TOKEN = "secret";
 const headers = { authorization: `Bearer ${TOKEN}`, "content-type": "application/json" };
 const killSession = vi.fn(async () => {});
+const ensureAllSkillsFn = vi.fn(async () => ({ results: [] }));
 
 beforeAll(async () => {
   dir = mkdtempSync(join(tmpdir(), "ad-ws-"));
@@ -28,7 +29,13 @@ beforeAll(async () => {
       newSession: async () => {},
       killSession,
       hasSession: async () => true,
+      sendKeys: async () => {},
+      capturePane: async () => "",
+      paneCurrentCommand: async () => "claude",
+      paneChildren: async () => [],
     },
+    ensureAllSkillsFn,
+    installSkillsOnStartup: false,
   });
   url = built.url;
   stop = built.close;
@@ -56,7 +63,8 @@ describe("workspaces 라우트", () => {
     expect(await listDeleted()).toEqual([]);
   });
 
-  it("워크스페이스를 생성하고 반환한다", async () => {
+  it("워크스페이스를 생성하고 반환하면서 vendored 스킬을 일괄 설치한다", async () => {
+    ensureAllSkillsFn.mockClear();
     const res = await fetch(`${url}/workspaces`, {
       method: "POST",
       headers,
@@ -69,6 +77,9 @@ describe("workspaces 라우트", () => {
       name: "owngo",
       path: "/tmp/ad-test-owngo",
       deletedAt: null,
+    });
+    expect(ensureAllSkillsFn).toHaveBeenCalledWith({
+      workspacePath: "/tmp/ad-test-owngo",
     });
   });
 
@@ -194,5 +205,57 @@ describe("workspaces 라우트", () => {
     });
     expect(res.status).toBe(409);
     expect(await res.json()).toMatchObject({ error: "not_soft_deleted" });
+  });
+});
+
+describe("기동 시 스킬 일괄 설치", () => {
+  it("installSkillsOnStartup=true 면 활성 워크스페이스 모두에 대해 ensureAllSkills 가 호출된다", async () => {
+    const localDir = mkdtempSync(join(tmpdir(), "ad-ws-startup-"));
+    const localHandle = openDatabase({ filePath: join(localDir, "db.sqlite") });
+    // soft-deleted 한 개 + 활성 두 개 prepopulate
+    localHandle.db
+      .insert(workspaces)
+      .values([
+        { name: "a", path: "/tmp/ws-a", createdAt: Date.now() },
+        { name: "b", path: "/tmp/ws-b", createdAt: Date.now() },
+        {
+          name: "trashed",
+          path: "/tmp/ws-trashed",
+          createdAt: Date.now(),
+          deletedAt: Date.now(),
+        },
+      ])
+      .run();
+    const fn = vi.fn(async () => ({ results: [] }));
+    const built = await createServer({
+      db: localHandle,
+      token: TOKEN,
+      cli: [],
+      bind: "127.0.0.1",
+      port: 0,
+      tmux: {
+        listSessions: async () => [],
+        newSession: async () => {},
+        killSession: async () => {},
+        hasSession: async () => true,
+        sendKeys: async () => {},
+        capturePane: async () => "",
+        paneCurrentCommand: async () => "claude",
+      },
+      ensureAllSkillsFn: fn,
+      installSkillsOnStartup: true,
+    });
+    // 백그라운드 루프가 모든 active 워크스페이스(2개) 를 처리할 때까지 대기
+    const deadline = Date.now() + 2000;
+    while (fn.mock.calls.length < 2 && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    expect(fn.mock.calls.map((c) => c[0].workspacePath).sort()).toEqual([
+      "/tmp/ws-a",
+      "/tmp/ws-b",
+    ]);
+    await built.close();
+    localHandle.close();
+    rmSync(localDir, { recursive: true, force: true });
   });
 });

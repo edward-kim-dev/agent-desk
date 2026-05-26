@@ -1,0 +1,1 @@
+ALTER TABLE `sessions` ADD `briefed_at` integer;

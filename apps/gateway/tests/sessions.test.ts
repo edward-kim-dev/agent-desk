@@ -16,6 +16,12 @@ let stop: () => Promise<void>;
 let workspaceId: number;
 const newSession = vi.fn(async () => {});
 const killSession = vi.fn(async () => {});
+const injectFn = vi.fn(async () => ({ injected: true }));
+const ensureSkillFn = vi.fn(async () => ({
+  status: "installed" as const,
+  linkPath: "/tmp/ws/.claude/skills/brainstorming",
+  sourcePath: "/tmp/vendor/skills/brainstorming",
+}));
 
 beforeAll(async () => {
   dir = mkdtempSync(join(tmpdir(), "ad-sess-"));
@@ -38,7 +44,15 @@ beforeAll(async () => {
       newSession,
       killSession,
       hasSession: async () => true,
+      sendKeys: async () => {},
+      capturePane: async () => "",
+      paneCurrentCommand: async () => "claude",
+      paneChildren: async () => [],
     },
+    injectFn,
+    ensureSkillFn,
+    ensureAllSkillsFn: async () => ({ results: [] }),
+    installSkillsOnStartup: false,
   });
   url = built.url;
   stop = built.close;
@@ -98,5 +112,92 @@ describe("sessions 라우트", () => {
       sessions: Array<{ status: string }>;
     };
     expect(after.sessions[0].status).toBe("dead");
+  });
+});
+
+describe("sessions /brief 라우트", () => {
+  async function createSession() {
+    const res = await fetch(`${url}/sessions`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ workspaceId, cli: "claude", args: [] }),
+    });
+    expect(res.status).toBe(201);
+    return (await res.json()) as { id: number; tmuxName: string };
+  }
+
+  it("topic 만 있어도 ensureSkill 와 inject 가 호출되고 briefedAt 이 채워진다", async () => {
+    injectFn.mockResolvedValueOnce({ injected: true });
+    ensureSkillFn.mockClear();
+    const s = await createSession();
+    const res = await fetch(`${url}/sessions/${s.id}/brief`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ topic: "add notifications" }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      session: { briefedAt: number | null };
+      result: { injected: boolean };
+      install: { status: string };
+    };
+    expect(body.result.injected).toBe(true);
+    expect(body.session.briefedAt).toBeGreaterThan(0);
+    expect(body.install.status).toBe("installed");
+
+    expect(ensureSkillFn).toHaveBeenCalledWith({
+      workspacePath: "/workspaces/owngo",
+      skillName: "brainstorming",
+    });
+    const call = injectFn.mock.calls.at(-1)![0] as { prompt: string };
+    expect(call.prompt).toMatch(/^\/brainstorming /);
+    expect(call.prompt).toContain("Topic: add notifications");
+  });
+
+  it("이미 briefed 인 세션은 409 로 거부한다", async () => {
+    injectFn.mockResolvedValueOnce({ injected: true });
+    const s = await createSession();
+    await fetch(`${url}/sessions/${s.id}/brief`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ topic: "x" }),
+    });
+    const res = await fetch(`${url}/sessions/${s.id}/brief`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ topic: "y" }),
+    });
+    expect(res.status).toBe(409);
+  });
+
+  it("inject 실패는 502 + briefedAt 미설정", async () => {
+    injectFn.mockResolvedValueOnce({
+      injected: false,
+      reason: "cli_exited_to_shell",
+      detail: "bash",
+    });
+    const s = await createSession();
+    const res = await fetch(`${url}/sessions/${s.id}/brief`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ topic: "test" }),
+    });
+    expect(res.status).toBe(502);
+    const body = (await res.json()) as {
+      session: { briefedAt: number | null };
+      result: { injected: boolean; reason: string };
+    };
+    expect(body.session.briefedAt).toBeNull();
+    expect(body.result.reason).toBe("cli_exited_to_shell");
+  });
+
+  it("topic 누락은 400 으로 거부한다", async () => {
+    const s = await createSession();
+    const res = await fetch(`${url}/sessions/${s.id}/brief`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(400);
   });
 });

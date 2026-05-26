@@ -9,11 +9,9 @@ export function NewSessionDialog(props: {
   onCreated: () => void;
 }) {
   const cliId = useId();
-  const argsId = useId();
   const [open, setOpen] = useState(false);
   const [cliList, setCliList] = useState<Array<{ name: string }>>([]);
   const [cli, setCli] = useState("claude");
-  const [args, setArgs] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -51,10 +49,9 @@ export function NewSessionDialog(props: {
           await gateway.sessions.create({
             workspaceId: props.workspaceId,
             cli,
-            args: args.trim() === "" ? [] : args.trim().split(/\s+/),
+            args: [],
           });
           setOpen(false);
-          setArgs("");
           props.onCreated();
         } catch (err) {
           setError((err as Error).message);
@@ -78,15 +75,6 @@ export function NewSessionDialog(props: {
           ))}
         </select>
       </Field>
-      <Field htmlFor={argsId} label="Args" hint="공백 구분. 비워두면 기본 인자만 사용.">
-        <input
-          id={argsId}
-          className={`${fieldControl} font-mono text-[12px]`}
-          value={args}
-          onChange={(e) => setArgs(e.target.value)}
-          placeholder="--resume"
-        />
-      </Field>
       {error && (
         <div role="alert" className="text-[11px] text-red-700">
           {error}
@@ -98,7 +86,6 @@ export function NewSessionDialog(props: {
           className={btnGhost}
           onClick={() => {
             setOpen(false);
-            setArgs("");
             setError(null);
           }}
         >

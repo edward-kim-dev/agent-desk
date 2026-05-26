@@ -1,10 +1,14 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { SessionDto } from "@agent-desk/shared";
+import type {
+  BrainstormingBriefRequest,
+  SessionDto,
+} from "@agent-desk/shared";
 import { gateway } from "@/lib/gateway-client";
 import { SessionList } from "../session-list";
 import { NewSessionDialog } from "../new-session-dialog";
 import { TerminalPanel } from "../terminal-panel";
+import { BriefingFormModal } from "../briefing-form-modal";
 
 const POLL_INTERVAL_MS = 3000;
 
@@ -13,7 +17,16 @@ export function TerminalTab(props: {
   sessionsOpen: boolean;
 }) {
   const [sessions, setSessions] = useState<SessionDto[]>([]);
-  const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null);
+  const [selectedSessionId, setSelectedSessionId] = useState<number | null>(
+    null,
+  );
+  const [briefingSessionId, setBriefingSessionId] = useState<number | null>(
+    null,
+  );
+  const [briefingBusy, setBriefingBusy] = useState(false);
+  const [briefingError, setBriefingError] = useState<string | null>(null);
+  /** 사용자가 Skip 한 세션 id 집합 — 같은 탭에서 다시 자동으로 모달이 뜨지 않게 한다. */
+  const skippedRef = useRef<Set<number>>(new Set());
   const stoppedRef = useRef(false);
   const inFlightRef = useRef<AbortController | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -77,6 +90,57 @@ export function TerminalTab(props: {
     if (!stillAlive) setSelectedSessionId(null);
   }, [sessions, selectedSessionId]);
 
+  const handleSelectSession = useCallback(
+    (id: number) => {
+      setSelectedSessionId(id);
+      const target = sessions.find((s) => s.id === id);
+      if (
+        target &&
+        target.status === "active" &&
+        target.cli === "claude" &&
+        target.briefedAt == null &&
+        !skippedRef.current.has(id)
+      ) {
+        setBriefingError(null);
+        setBriefingSessionId(id);
+      }
+    },
+    [sessions],
+  );
+
+  const handleBriefSubmit = useCallback(
+    async (payload: BrainstormingBriefRequest) => {
+      if (briefingSessionId == null) return;
+      setBriefingBusy(true);
+      setBriefingError(null);
+      try {
+        const res = await gateway.sessions.brief(briefingSessionId, payload);
+        if (!res.result.injected) {
+          setBriefingError(
+            `주입 실패: ${res.result.reason ?? "unknown"}${
+              res.result.detail ? ` — ${res.result.detail}` : ""
+            }`,
+          );
+          return;
+        }
+        setBriefingSessionId(null);
+        refreshSessions();
+      } catch (err) {
+        setBriefingError((err as Error).message);
+      } finally {
+        setBriefingBusy(false);
+      }
+    },
+    [briefingSessionId, refreshSessions],
+  );
+
+  const handleBriefDismiss = useCallback(() => {
+    if (briefingSessionId != null) skippedRef.current.add(briefingSessionId);
+    setBriefingSessionId(null);
+    setBriefingError(null);
+    setBriefingBusy(false);
+  }, [briefingSessionId]);
+
   const sessionsOpen = props.sessionsOpen;
 
   return (
@@ -118,13 +182,21 @@ export function TerminalTab(props: {
           sessions={sessions}
           activeWorkspaceId={props.activeWorkspaceId}
           selectedId={selectedSessionId}
-          onSelect={setSelectedSessionId}
+          onSelect={handleSelectSession}
           onKill={async (id) => {
             await gateway.sessions.remove(id);
             refreshSessions();
           }}
         />
       </aside>
+
+      <BriefingFormModal
+        open={briefingSessionId != null}
+        busy={briefingBusy}
+        errorMessage={briefingError}
+        onSubmit={handleBriefSubmit}
+        onDismiss={handleBriefDismiss}
+      />
     </div>
   );
 }

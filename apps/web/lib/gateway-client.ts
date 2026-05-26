@@ -1,9 +1,19 @@
 import type {
+  BrainstormingBriefRequest,
   CreateSessionRequest,
   CreateWorkspaceRequest,
   WorkspaceDto,
   SessionDto,
 } from "@agent-desk/shared";
+
+export interface BriefResponse {
+  session: SessionDto;
+  result: {
+    injected: boolean;
+    reason?: string;
+    detail?: string;
+  };
+}
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api/proxy/${path}`, {
@@ -44,6 +54,11 @@ export const gateway = {
       }),
     remove: (id: number) =>
       fetch(`/api/proxy/sessions/${id}`, { method: "DELETE" }),
+    brief: (id: number, input: BrainstormingBriefRequest) =>
+      call<BriefResponse>(`sessions/${id}/brief`, {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
   },
   cli: () =>
     call<{
