@@ -11,5 +11,6 @@ export const workspaceDto = z.object({
   name: z.string(),
   path: z.string(),
   createdAt: z.number().int(),
+  deletedAt: z.number().int().nullable(),
 });
 export type WorkspaceDto = z.infer<typeof workspaceDto>;

@@ -7,8 +7,8 @@ describe("<WorkspaceSwitcher>", () => {
     render(
       <WorkspaceSwitcher
         workspaces={[
-          { id: 1, name: "owngo", path: "/workspaces/owngo", createdAt: 0 },
-          { id: 2, name: "side", path: "/tmp/side", createdAt: 0 },
+          { id: 1, name: "owngo", path: "/workspaces/owngo", createdAt: 0, deletedAt: null },
+          { id: 2, name: "side", path: "/tmp/side", createdAt: 0, deletedAt: null },
         ]}
         activeId={2}
         onSelect={() => {}}

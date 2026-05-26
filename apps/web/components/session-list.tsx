@@ -1,5 +1,6 @@
 "use client";
 import type { SessionDto } from "@agent-desk/shared";
+import { btnGhostDanger } from "./ui/button-classes";
 
 export function SessionList(props: {
   sessions: SessionDto[];
@@ -10,40 +11,70 @@ export function SessionList(props: {
 }) {
   const scoped = props.sessions
     .filter((s) => s.status === "active")
-    .filter((s) => props.activeWorkspaceId == null || s.workspaceId === props.activeWorkspaceId);
+    .filter(
+      (s) =>
+        props.activeWorkspaceId == null ||
+        s.workspaceId === props.activeWorkspaceId,
+    );
 
   if (scoped.length === 0) {
-    return <div className="text-xs opacity-55">no active sessions</div>;
+    return (
+      <p className="px-1 text-[11px] opacity-50">no active sessions</p>
+    );
   }
 
   return (
-    <ul className="flex flex-col gap-1">
-      {scoped.map((s) => (
-        <li
-          key={s.id}
-          className={`flex items-center justify-between px-2 py-1 text-sm ${
-            props.selectedId === s.id ? "bg-[#1a1208]/[0.08]" : ""
-          }`}
-        >
-          <button
-            className="min-w-0 flex-1 truncate text-left"
-            onClick={() => props.onSelect(s.id)}
-            title={`${s.cli ?? "?"} • ${s.attachedClients} client(s)`}
+    <ul
+      role="list"
+      className="flex flex-col divide-y divide-[var(--hill-rule)] border border-[var(--hill-rule)]"
+    >
+      {scoped.map((s) => {
+        const selected = props.selectedId === s.id;
+        return (
+          <li
+            key={s.id}
+            className={[
+              "relative flex items-start justify-between gap-2 px-3 py-2.5",
+              selected
+                ? "bg-[#1a1208]/[0.05]"
+                : "hover:bg-[#1a1208]/[0.02]",
+            ].join(" ")}
           >
-            <span className="font-mono">{s.tmuxName}</span>
-            <span className="ml-2 text-xs opacity-55">
-              {s.cli}
-              {s.adopted ? " (adopted)" : ""}
-            </span>
-          </button>
-          <button
-            className="ml-2 text-xs text-red-600"
-            onClick={() => props.onKill(s.id)}
-          >
-            kill
-          </button>
-        </li>
-      ))}
+            {selected && (
+              <span
+                aria-hidden
+                className="absolute inset-y-0 left-0 w-[2px] bg-[#1a1208]"
+              />
+            )}
+            <button
+              type="button"
+              onClick={() => props.onSelect(s.id)}
+              aria-pressed={selected}
+              className="min-w-0 flex-1 cursor-pointer border-0 bg-transparent p-0 text-left"
+              title={`${s.cli ?? "?"} • ${s.attachedClients} client(s)`}
+            >
+              <div className="truncate font-mono text-[12.5px] text-[#1a1208]">
+                {s.tmuxName}
+              </div>
+              <div className="mt-1 flex flex-wrap items-center gap-x-2 text-[10px] uppercase tracking-[0.22em] opacity-55">
+                <span>{s.cli ?? "—"}</span>
+                {s.attachedClients > 0 && (
+                  <span>· {s.attachedClients} client{s.attachedClients === 1 ? "" : "s"}</span>
+                )}
+                {s.adopted && <span>· adopted</span>}
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => props.onKill(s.id)}
+              className={`${btnGhostDanger} px-2 py-1`}
+              aria-label={`kill ${s.tmuxName}`}
+            >
+              Kill
+            </button>
+          </li>
+        );
+      })}
     </ul>
   );
 }

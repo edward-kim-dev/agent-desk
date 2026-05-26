@@ -36,12 +36,15 @@ export function AppShell() {
       const { workspaces } = await gateway.workspaces.list({ signal });
       if (signal?.aborted) return;
       setWorkspaces(workspaces);
-      if (workspaces.length > 0 && activeId == null) setActiveId(workspaces[0].id);
+      setActiveId((prev) => {
+        if (prev != null && workspaces.some((w) => w.id === prev)) return prev;
+        return workspaces[0]?.id ?? null;
+      });
     } catch (e) {
       if ((e as { name?: string }).name === "AbortError") return;
       throw e;
     }
-  }, [activeId]);
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -88,10 +91,7 @@ export function AppShell() {
       <main className="min-h-0 flex-1 overflow-hidden">
         {tab === "home" && <HomeTab />}
         {tab === "terminal" && (
-          <TerminalTab
-            activeWorkspaceId={activeId}
-            onWorkspacesChanged={refresh}
-          />
+          <TerminalTab activeWorkspaceId={activeId} />
         )}
         {tab === "wiki" && (
           <WikiTab
@@ -102,7 +102,12 @@ export function AppShell() {
         )}
         {tab === "graph" && <GraphTab />}
         {tab === "harness" && <HarnessTab subview={harnessSubview} />}
-        {tab === "settings" && <SettingsTab subview={settingsSubview} />}
+        {tab === "settings" && (
+          <SettingsTab
+            subview={settingsSubview}
+            onWorkspacesChanged={refresh}
+          />
+        )}
       </main>
     </div>
   );

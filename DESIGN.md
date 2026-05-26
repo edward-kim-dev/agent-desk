@@ -13,7 +13,7 @@ agent-desk 의 디자인 시스템 및 시각 요소 가이드. 참조 사이트
 
 | 위치 | 컴포넌트 | 용도 |
 |---|---|---|
-| Home 탭 | `HalftoneScene` | cloud · mountain · tree 3-layer 합성 hero |
+| Home 탭 | `HalftoneScene` | meadow · tree · cloud 3-layer 합성 hero |
 | (향후) 로딩·랜딩·서브뷰 시각 요소 | `HalftoneScene` | 풍경·인물 합성 |
 
 ### 기본 원칙
@@ -52,7 +52,7 @@ border-soft   rgba(26,18,8,0.10 ~ 0.15)   → --hill-rule
 apps/web/lib/halftone/                  순수 TypeScript (React 비의존)
 ├── types.ts        ObjectConfig, SceneObject, HalftoneOptions
 ├── shader.ts       VERT_SRC + buildFragSrc(neighborRadius)
-├── text.ts         makeTextCanvas — (현재 미사용, 향후 텍스트 합성용)
+├── text.ts         makeTextCanvas — type:'text' 오브젝트용 (현재 호출부 없음)
 ├── presets.ts      PRESETS.{image,mountain,cloud,tree,sheep,bird,text}
 ├── core.ts         Halftone — WebGL 엔진, 다중 오브젝트 합성
 └── index.ts        public API
@@ -78,10 +78,10 @@ import { PRESETS } from "@/lib/halftone";
   objects={[
     { type: "image", src: "/assets/halftone/meadow.webp",
       config: { ...PRESETS.image, x: 0, y: "35%", width: "100%", height: "65%" } },
-    { type: "video", src: "/assets/halftone/cloud.mp4",
-      config: { ...PRESETS.cloud, x: "14%", y: "4%", width: "40%", height: "54%" } },
     { type: "video", src: "/assets/halftone/tree.mp4",
       config: { ...PRESETS.tree, x: "76%", y: "10%", width: "20%", height: "60%" } },
+    { type: "video", src: "/assets/halftone/cloud.mp4",
+      config: { ...PRESETS.cloud, x: "14%", y: "4%", width: "40%", height: "54%" } },
   ]}
 />
 ```

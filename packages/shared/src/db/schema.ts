@@ -5,6 +5,7 @@ export const workspaces = sqliteTable("workspaces", {
   path: text("path").notNull().unique(),
   name: text("name").notNull(),
   createdAt: integer("created_at").notNull(),
+  deletedAt: integer("deleted_at"),
 });
 
 export const sessions = sqliteTable("sessions", {

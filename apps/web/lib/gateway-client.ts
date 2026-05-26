@@ -20,11 +20,19 @@ export const gateway = {
   workspaces: {
     list: (opts?: AbortOptions) =>
       call<{ workspaces: WorkspaceDto[] }>(`workspaces`, opts),
+    listDeleted: (opts?: AbortOptions) =>
+      call<{ workspaces: WorkspaceDto[] }>(`workspaces?onlyDeleted=true`, opts),
     create: (input: CreateWorkspaceRequest) =>
       call<WorkspaceDto>(`workspaces`, {
         method: "POST",
         body: JSON.stringify(input),
       }),
+    remove: (id: number) =>
+      fetch(`/api/proxy/workspaces/${id}`, { method: "DELETE" }),
+    restore: (id: number) =>
+      call<WorkspaceDto>(`workspaces/${id}/restore`, { method: "POST" }),
+    permanentlyDelete: (id: number) =>
+      fetch(`/api/proxy/workspaces/${id}/permanent`, { method: "DELETE" }),
   },
   sessions: {
     list: (opts?: AbortOptions) =>

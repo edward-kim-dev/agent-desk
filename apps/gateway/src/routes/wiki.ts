@@ -88,7 +88,7 @@ export function wikiRoutes(db: DbHandle["db"]): Hono {
   r.get("/:wsId/wiki/tree", (c) => {
     const wsId = Number(c.req.param("wsId"));
     const ws = db.select().from(workspaces).where(eq(workspaces.id, wsId)).get();
-    if (!ws) return c.json({ error: "not_found" }, 404);
+    if (!ws || ws.deletedAt != null) return c.json({ error: "not_found" }, 404);
     const root = wikiRoot(ws.path);
     if (!existsSync(root)) return c.json({ root: null });
     return c.json({ root: readTree(root, root) });
@@ -99,7 +99,7 @@ export function wikiRoutes(db: DbHandle["db"]): Hono {
     const parsed = readWikiFileRequest.safeParse({ path: c.req.query("path") });
     if (!parsed.success) return c.json({ error: "invalid_path" }, 400);
     const ws = db.select().from(workspaces).where(eq(workspaces.id, wsId)).get();
-    if (!ws) return c.json({ error: "not_found" }, 404);
+    if (!ws || ws.deletedAt != null) return c.json({ error: "not_found" }, 404);
     const root = wikiRoot(ws.path);
     const abs = safeJoin(root, parsed.data.path);
     if (!abs) return c.json({ error: "path_traversal" }, 400);
@@ -119,7 +119,7 @@ export function wikiRoutes(db: DbHandle["db"]): Hono {
     const parsed = writeWikiFileRequest.safeParse(await c.req.json());
     if (!parsed.success) return c.json({ error: "invalid_request" }, 400);
     const ws = db.select().from(workspaces).where(eq(workspaces.id, wsId)).get();
-    if (!ws) return c.json({ error: "not_found" }, 404);
+    if (!ws || ws.deletedAt != null) return c.json({ error: "not_found" }, 404);
     const root = wikiRoot(ws.path);
     const abs = safeJoin(root, parsed.data.path);
     if (!abs) return c.json({ error: "path_traversal" }, 400);
@@ -135,7 +135,7 @@ export function wikiRoutes(db: DbHandle["db"]): Hono {
     const parsed = appendLogRequest.safeParse(await c.req.json());
     if (!parsed.success) return c.json({ error: "invalid_request" }, 400);
     const ws = db.select().from(workspaces).where(eq(workspaces.id, wsId)).get();
-    if (!ws) return c.json({ error: "not_found" }, 404);
+    if (!ws || ws.deletedAt != null) return c.json({ error: "not_found" }, 404);
     const root = wikiRoot(ws.path);
     const logFile = join(root, "log.md");
     const ts = new Date().toISOString();

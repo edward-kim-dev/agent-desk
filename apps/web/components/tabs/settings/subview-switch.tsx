@@ -2,6 +2,7 @@
 
 export type SettingsSubview =
   | "general"
+  | "workspaces"
   | "database"
   | "cli-catalog"
   | "auth"
@@ -9,12 +10,20 @@ export type SettingsSubview =
 
 const LABELS: Record<SettingsSubview, string> = {
   general: "General",
+  workspaces: "Workspaces",
   database: "Database",
   "cli-catalog": "CLI Catalog",
   auth: "Auth",
   about: "About",
 };
-const ORDER: SettingsSubview[] = ["general", "database", "cli-catalog", "auth", "about"];
+const ORDER: SettingsSubview[] = [
+  "general",
+  "workspaces",
+  "database",
+  "cli-catalog",
+  "auth",
+  "about",
+];
 const STUB: Partial<Record<SettingsSubview, boolean>> = {
   general: true,
   database: true,

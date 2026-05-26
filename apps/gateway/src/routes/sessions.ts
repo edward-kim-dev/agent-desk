@@ -52,7 +52,7 @@ export function sessionRoutes(opts: {
       .from(workspaces)
       .where(eq(workspaces.id, parsed.data.workspaceId))
       .get();
-    if (!ws) return c.json({ error: "unknown_workspace" }, 400);
+    if (!ws || ws.deletedAt != null) return c.json({ error: "unknown_workspace" }, 400);
 
     const args = [...cliEntry.defaultArgs, ...parsed.data.args];
     const tmuxName = generateSessionName(ws.name);

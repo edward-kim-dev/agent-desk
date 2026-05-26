@@ -1,16 +1,21 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { gateway } from "@/lib/gateway-client";
+import { Field, fieldControl } from "./ui/field";
+import { btnGhost, btnPrimary } from "./ui/button-classes";
 
 export function NewSessionDialog(props: {
   workspaceId: number;
   onCreated: () => void;
 }) {
+  const cliId = useId();
+  const argsId = useId();
   const [open, setOpen] = useState(false);
   const [cliList, setCliList] = useState<Array<{ name: string }>>([]);
   const [cli, setCli] = useState("claude");
   const [args, setArgs] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     gateway
@@ -25,20 +30,23 @@ export function NewSessionDialog(props: {
   if (!open) {
     return (
       <button
-        className="rounded border px-2 py-1 text-sm"
+        type="button"
+        className={btnGhost}
         onClick={() => setOpen(true)}
+        aria-expanded={false}
       >
-        + new session
+        + new
       </button>
     );
   }
 
   return (
     <form
-      className="flex flex-col gap-2 rounded border p-2"
+      className="flex flex-col gap-3 border border-[var(--hill-rule)] p-4"
       onSubmit={async (e) => {
         e.preventDefault();
         setError(null);
+        setBusy(true);
         try {
           await gateway.sessions.create({
             workspaceId: props.workspaceId,
@@ -50,36 +58,56 @@ export function NewSessionDialog(props: {
           props.onCreated();
         } catch (err) {
           setError((err as Error).message);
+        } finally {
+          setBusy(false);
         }
       }}
     >
-      <label className="text-xs">cli</label>
-      <select
-        className="rounded border px-2 py-1 text-sm"
-        value={cli}
-        onChange={(e) => setCli(e.target.value)}
-      >
-        {cliList.map((c) => (
-          <option key={c.name}>{c.name}</option>
-        ))}
-      </select>
-      <label className="text-xs">args (space separated)</label>
-      <input
-        className="rounded border px-2 py-1 text-sm font-mono"
-        value={args}
-        onChange={(e) => setArgs(e.target.value)}
-      />
-      <div className="flex gap-2">
-        <button className="rounded border px-2 py-1 text-sm">create</button>
+      <div className="text-[10px] font-semibold uppercase tracking-[0.24em] opacity-55">
+        New session
+      </div>
+      <Field htmlFor={cliId} label="CLI">
+        <select
+          id={cliId}
+          className={fieldControl}
+          value={cli}
+          onChange={(e) => setCli(e.target.value)}
+        >
+          {cliList.map((c) => (
+            <option key={c.name}>{c.name}</option>
+          ))}
+        </select>
+      </Field>
+      <Field htmlFor={argsId} label="Args" hint="공백 구분. 비워두면 기본 인자만 사용.">
+        <input
+          id={argsId}
+          className={`${fieldControl} font-mono text-[12px]`}
+          value={args}
+          onChange={(e) => setArgs(e.target.value)}
+          placeholder="--resume"
+        />
+      </Field>
+      {error && (
+        <div role="alert" className="text-[11px] text-red-700">
+          {error}
+        </div>
+      )}
+      <div className="flex items-center justify-end gap-2">
         <button
           type="button"
-          className="rounded border px-2 py-1 text-sm"
-          onClick={() => setOpen(false)}
+          className={btnGhost}
+          onClick={() => {
+            setOpen(false);
+            setArgs("");
+            setError(null);
+          }}
         >
-          cancel
+          Cancel
+        </button>
+        <button type="submit" disabled={busy} className={btnPrimary}>
+          {busy ? "…" : "Create"}
         </button>
       </div>
-      {error && <div className="text-xs text-red-600">{error}</div>}
     </form>
   );
 }

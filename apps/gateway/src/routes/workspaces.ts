@@ -1,13 +1,30 @@
 import { Hono } from "hono";
-import { eq } from "drizzle-orm";
-import { workspaces, createWorkspaceRequest } from "@agent-desk/shared";
+import { existsSync, rmSync } from "node:fs";
+import { resolve } from "node:path";
+import { and, eq, isNotNull, isNull } from "drizzle-orm";
+import {
+  createWorkspaceRequest,
+  sessionEvents,
+  sessions,
+  workspaces,
+} from "@agent-desk/shared";
 import type { DbHandle } from "../db";
+import type { TmuxClient } from "../tmux/commands";
 
-export function workspaceRoutes(db: DbHandle["db"]): Hono {
+export function workspaceRoutes(opts: {
+  db: DbHandle["db"];
+  tmux: TmuxClient;
+}): Hono {
+  const { db, tmux } = opts;
   const r = new Hono();
 
   r.get("/", (c) => {
-    const rows = db.select().from(workspaces).all();
+    const onlyDeleted = c.req.query("onlyDeleted") === "true";
+    const rows = db
+      .select()
+      .from(workspaces)
+      .where(onlyDeleted ? isNotNull(workspaces.deletedAt) : isNull(workspaces.deletedAt))
+      .all();
     return c.json({ workspaces: rows });
   });
 
@@ -16,29 +33,108 @@ export function workspaceRoutes(db: DbHandle["db"]): Hono {
     if (!parsed.success) {
       return c.json({ error: "invalid_request", details: parsed.error.format() }, 400);
     }
-    try {
-      const inserted = db
-        .insert(workspaces)
-        .values({
-          name: parsed.data.name,
-          path: parsed.data.path,
-          createdAt: Date.now(),
-        })
-        .returning()
-        .all();
-      return c.json(inserted[0], 201);
-    } catch (err) {
-      if (String(err).includes("UNIQUE constraint failed")) {
-        return c.json({ error: "workspace_exists" }, 409);
+    const existing = db
+      .select()
+      .from(workspaces)
+      .where(eq(workspaces.path, parsed.data.path))
+      .get();
+    if (existing) {
+      if (existing.deletedAt != null) {
+        return c.json(
+          { error: "workspace_soft_deleted", id: existing.id, name: existing.name },
+          409,
+        );
       }
-      throw err;
+      return c.json({ error: "workspace_exists" }, 409);
     }
+    const inserted = db
+      .insert(workspaces)
+      .values({
+        name: parsed.data.name,
+        path: parsed.data.path,
+        createdAt: Date.now(),
+      })
+      .returning()
+      .all();
+    return c.json(inserted[0], 201);
   });
 
-  r.delete("/:id", (c) => {
+  r.delete("/:id", async (c) => {
     const id = Number(c.req.param("id"));
     if (!Number.isInteger(id)) return c.json({ error: "bad_id" }, 400);
+    const ws = db.select().from(workspaces).where(eq(workspaces.id, id)).get();
+    if (!ws) return c.json({ error: "not_found" }, 404);
+    if (ws.deletedAt != null) return c.body(null, 204);
+
+    const now = Date.now();
+    const liveSessions = db
+      .select()
+      .from(sessions)
+      .where(and(eq(sessions.workspaceId, id), eq(sessions.status, "active")))
+      .all();
+    for (const s of liveSessions) {
+      try {
+        await tmux.killSession(s.tmuxName);
+      } catch (err) {
+        console.warn("[workspaces] kill failed (continuing):", err);
+      }
+      db.update(sessions).set({ status: "dead" }).where(eq(sessions.id, s.id)).run();
+      db.insert(sessionEvents)
+        .values({
+          sessionId: s.id,
+          kind: "killed",
+          payloadJson: JSON.stringify({ reason: "workspace_deleted" }),
+          at: now,
+        })
+        .run();
+    }
+    db.update(workspaces).set({ deletedAt: now }).where(eq(workspaces.id, id)).run();
+    return c.body(null, 204);
+  });
+
+  r.post("/:id/restore", (c) => {
+    const id = Number(c.req.param("id"));
+    if (!Number.isInteger(id)) return c.json({ error: "bad_id" }, 400);
+    const ws = db.select().from(workspaces).where(eq(workspaces.id, id)).get();
+    if (!ws) return c.json({ error: "not_found" }, 404);
+    if (ws.deletedAt == null) return c.json(ws);
+    const collision = db
+      .select()
+      .from(workspaces)
+      .where(and(eq(workspaces.path, ws.path), isNull(workspaces.deletedAt)))
+      .get();
+    if (collision) return c.json({ error: "path_taken", id: collision.id }, 409);
+    const restored = db
+      .update(workspaces)
+      .set({ deletedAt: null })
+      .where(eq(workspaces.id, id))
+      .returning()
+      .all();
+    return c.json(restored[0]);
+  });
+
+  r.delete("/:id/permanent", (c) => {
+    const id = Number(c.req.param("id"));
+    if (!Number.isInteger(id)) return c.json({ error: "bad_id" }, 400);
+    const ws = db.select().from(workspaces).where(eq(workspaces.id, id)).get();
+    if (!ws) return c.json({ error: "not_found" }, 404);
+    if (ws.deletedAt == null) return c.json({ error: "not_soft_deleted" }, 409);
+
+    const rows = db.select({ id: sessions.id }).from(sessions).where(eq(sessions.workspaceId, id)).all();
+    for (const s of rows) {
+      db.delete(sessionEvents).where(eq(sessionEvents.sessionId, s.id)).run();
+    }
+    db.delete(sessions).where(eq(sessions.workspaceId, id)).run();
     db.delete(workspaces).where(eq(workspaces.id, id)).run();
+
+    const wikiDir = resolve(ws.path, "wiki");
+    if (existsSync(wikiDir)) {
+      try {
+        rmSync(wikiDir, { recursive: true, force: true });
+      } catch (err) {
+        console.warn("[workspaces] wiki rm failed (continuing):", err);
+      }
+    }
     return c.body(null, 204);
   });
 

@@ -41,7 +41,7 @@ export async function createServer(
   const api = new Hono();
   api.use("*", bearerAuth(opts.token));
   api.get("/cli", (c) => c.json({ cli: opts.cli }));
-  api.route("/workspaces", workspaceRoutes(opts.db.db));
+  api.route("/workspaces", workspaceRoutes({ db: opts.db.db, tmux }));
   api.route("/workspaces", wikiRoutes(opts.db.db));
   api.route("/sessions", sessionRoutes({ db: opts.db.db, tmux, cli: opts.cli }));
   app.route("/", api);
