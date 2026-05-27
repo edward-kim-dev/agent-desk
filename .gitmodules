@@ -1,3 +1,6 @@
 [submodule "vendor/superpowers"]
 	path = vendor/superpowers
 	url = https://github.com/obra/superpowers.git
+[submodule "vendor/harness"]
+	path = vendor/harness
+	url = https://github.com/RevFactory/harness.git
