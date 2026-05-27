@@ -241,8 +241,11 @@ function ActiveSection(props: {
                   <div className="flex items-center gap-2 truncate text-[13.5px] text-[#1a1208]">
                     <span className="truncate">{w.name}</span>
                     {w.harnessEnabled && (
-                      <span className="rounded border border-[var(--hill-rule)] px-1.5 text-[10px] uppercase tracking-wide opacity-60">
-                        harness
+                      <span
+                        className="shrink-0 whitespace-nowrap rounded border border-[var(--hill-rule)] px-1.5 text-[10px] opacity-60"
+                        title="Claude Code Agent Teams 실험 기능이 활성화된 워크스페이스입니다. Claude Max 구독 필요."
+                      >
+                        Claude Agent Teams · 실험
                       </span>
                     )}
                   </div>
