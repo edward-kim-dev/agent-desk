@@ -1,20 +1,16 @@
 import type {
-  BrainstormingBriefRequest,
+  AdvanceWorkPackageRequest,
+  CompleteWorkPackageRequest,
   CreateSessionRequest,
   CreateWorkspaceRequest,
-  UpdateWorkspaceRequest,
-  WorkspaceDto,
+  PackageCatalogEntry,
   SessionDto,
+  StartWorkPackageRequest,
+  UpdateWorkspaceRequest,
+  WorkPackageArtifactDto,
+  WorkPackageDto,
+  WorkspaceDto,
 } from "@agent-desk/shared";
-
-export interface BriefResponse {
-  session: SessionDto;
-  result: {
-    injected: boolean;
-    reason?: string;
-    detail?: string;
-  };
-}
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api/proxy/${path}`, {
@@ -26,6 +22,17 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 type AbortOptions = { signal?: AbortSignal };
+
+export interface StartWorkPackageResponse {
+  instance: WorkPackageDto;
+  step: { index: number; title: string };
+  inject?: { injected: boolean; reason?: string; detail?: string };
+  install?: { status: string; linkPath?: string; sourcePath?: string; detail?: string };
+}
+
+export interface AdvanceWorkPackageResponse extends StartWorkPackageResponse {
+  artifactsDelta?: { inserted: number; updatedDrift: number };
+}
 
 export const gateway = {
   workspaces: {
@@ -60,10 +67,36 @@ export const gateway = {
       }),
     remove: (id: number) =>
       fetch(`/api/proxy/sessions/${id}`, { method: "DELETE" }),
-    brief: (id: number, input: BrainstormingBriefRequest) =>
-      call<BriefResponse>(`sessions/${id}/brief`, {
+  },
+  packages: {
+    list: (opts?: AbortOptions) =>
+      call<{ packages: PackageCatalogEntry[] }>(`packages`, opts),
+  },
+  workPackages: {
+    listForSession: (sessionId: number, opts?: AbortOptions) =>
+      call<{ instances: WorkPackageDto[] }>(
+        `sessions/${sessionId}/work-packages`,
+        opts,
+      ),
+    listArtifacts: (id: number, opts?: AbortOptions) =>
+      call<{ artifacts: WorkPackageArtifactDto[] }>(
+        `work-packages/${id}/artifacts`,
+        opts,
+      ),
+    start: (sessionId: number, input: StartWorkPackageRequest) =>
+      call<StartWorkPackageResponse>(`sessions/${sessionId}/work-packages`, {
         method: "POST",
         body: JSON.stringify(input),
+      }),
+    advance: (id: number, input: AdvanceWorkPackageRequest) =>
+      call<AdvanceWorkPackageResponse>(`work-packages/${id}/advance`, {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
+    complete: (id: number, input?: CompleteWorkPackageRequest) =>
+      call<{ instance: WorkPackageDto }>(`work-packages/${id}/complete`, {
+        method: "POST",
+        body: JSON.stringify(input ?? { outcome: "success" }),
       }),
   },
   cli: () =>

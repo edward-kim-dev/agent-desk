@@ -18,7 +18,6 @@ describe("<SessionList>", () => {
             attachedClients: 1,
             lastActivityAt: 0,
             createdAt: 0,
-            briefedAt: null,
           },
           {
             id: 2,
@@ -31,7 +30,6 @@ describe("<SessionList>", () => {
             attachedClients: 0,
             lastActivityAt: 0,
             createdAt: 0,
-            briefedAt: null,
           },
         ]}
         activeWorkspaceId={1}

@@ -1,14 +1,18 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
-  BrainstormingBriefRequest,
+  PackageCatalogEntry,
   SessionDto,
+  StartWorkPackageRequest,
+  WorkPackageArtifactDto,
+  WorkPackageDto,
 } from "@agent-desk/shared";
 import { gateway } from "@/lib/gateway-client";
 import { SessionList } from "../session-list";
 import { NewSessionDialog } from "../new-session-dialog";
 import { TerminalPanel } from "../terminal-panel";
-import { BriefingFormModal } from "../briefing-form-modal";
+import { WorkPackageModal } from "../work-package-modal";
+import { ActivePackageCard } from "../active-package-card";
 
 const POLL_INTERVAL_MS = 3000;
 
@@ -20,13 +24,17 @@ export function TerminalTab(props: {
   const [selectedSessionId, setSelectedSessionId] = useState<number | null>(
     null,
   );
-  const [briefingSessionId, setBriefingSessionId] = useState<number | null>(
-    null,
-  );
-  const [briefingBusy, setBriefingBusy] = useState(false);
-  const [briefingError, setBriefingError] = useState<string | null>(null);
-  /** 사용자가 Skip 한 세션 id 집합 — 같은 탭에서 다시 자동으로 모달이 뜨지 않게 한다. */
-  const skippedRef = useRef<Set<number>>(new Set());
+
+  const [packages, setPackages] = useState<PackageCatalogEntry[]>([]);
+  const [activeWp, setActiveWp] = useState<WorkPackageDto | null>(null);
+  const [artifacts, setArtifacts] = useState<WorkPackageArtifactDto[]>([]);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalBusy, setModalBusy] = useState(false);
+  const [modalError, setModalError] = useState<string | null>(null);
+  const [wpBusy, setWpBusy] = useState(false);
+  /** modal 을 한 번이라도 사용자가 dismiss 한 세션 — 같은 탭에서 다시 자동으로 안 뜸. */
+  const dismissedRef = useRef<Set<number>>(new Set());
+
   const stoppedRef = useRef(false);
   const inFlightRef = useRef<AbortController | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -73,6 +81,22 @@ export function TerminalTab(props: {
     };
   }, [fetchOnce]);
 
+  // 패키지 카탈로그 1 회 로드
+  useEffect(() => {
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const { packages } = await gateway.packages.list({
+          signal: controller.signal,
+        });
+        if (!controller.signal.aborted) setPackages(packages);
+      } catch (e) {
+        if ((e as { name?: string }).name === "AbortError") return;
+      }
+    })();
+    return () => controller.abort();
+  }, []);
+
   const activeCount = useMemo(() => {
     return sessions.filter(
       (s) =>
@@ -90,67 +114,137 @@ export function TerminalTab(props: {
     if (!stillAlive) setSelectedSessionId(null);
   }, [sessions, selectedSessionId]);
 
-  const handleSelectSession = useCallback(
-    (id: number) => {
-      setSelectedSessionId(id);
-      const target = sessions.find((s) => s.id === id);
-      if (
-        target &&
-        target.status === "active" &&
-        target.cli === "claude" &&
-        target.briefedAt == null &&
-        !skippedRef.current.has(id)
-      ) {
-        setBriefingError(null);
-        setBriefingSessionId(id);
-      }
-    },
-    [sessions],
-  );
+  const refreshArtifacts = useCallback(async (wpId: number) => {
+    try {
+      const { artifacts } = await gateway.workPackages.listArtifacts(wpId);
+      setArtifacts(artifacts);
+    } catch {
+      // ignore — UI 가 stale 한 채로 다음 호출에 갱신됨
+    }
+  }, []);
 
-  const handleBriefSubmit = useCallback(
-    async (payload: BrainstormingBriefRequest) => {
-      if (briefingSessionId == null) return;
-      setBriefingBusy(true);
-      setBriefingError(null);
+  // 선택된 세션의 활성 work package 조회
+  useEffect(() => {
+    if (selectedSessionId == null) {
+      setActiveWp(null);
+      setArtifacts([]);
+      return;
+    }
+    const controller = new AbortController();
+    void (async () => {
       try {
-        const res = await gateway.sessions.brief(briefingSessionId, payload);
-        if (!res.result.injected) {
-          setBriefingError(
-            `주입 실패: ${res.result.reason ?? "unknown"}${
-              res.result.detail ? ` — ${res.result.detail}` : ""
-            }`,
-          );
-          return;
+        const { instances } = await gateway.workPackages.listForSession(
+          selectedSessionId,
+          { signal: controller.signal },
+        );
+        if (controller.signal.aborted) return;
+        const active = instances.find((i) => i.status === "active") ?? null;
+        setActiveWp(active);
+        if (active) {
+          await refreshArtifacts(active.id);
+        } else {
+          setArtifacts([]);
         }
-        setBriefingSessionId(null);
-        refreshSessions();
+      } catch (e) {
+        if ((e as { name?: string }).name === "AbortError") return;
+      }
+    })();
+    return () => controller.abort();
+  }, [selectedSessionId, refreshArtifacts]);
+
+  // modal 자동 트리거: claude 세션 + 활성 work package 없음 + 아직 dismiss 안 함
+  useEffect(() => {
+    if (selectedSessionId == null) {
+      setModalOpen(false);
+      return;
+    }
+    const target = sessions.find((s) => s.id === selectedSessionId);
+    if (
+      target &&
+      target.status === "active" &&
+      target.cli === "claude" &&
+      activeWp == null &&
+      !dismissedRef.current.has(selectedSessionId)
+    ) {
+      setModalOpen(true);
+    } else {
+      setModalOpen(false);
+    }
+  }, [selectedSessionId, sessions, activeWp]);
+
+  const handleStart = useCallback(
+    async (body: StartWorkPackageRequest) => {
+      if (selectedSessionId == null) return;
+      setModalBusy(true);
+      setModalError(null);
+      try {
+        const res = await gateway.workPackages.start(selectedSessionId, body);
+        setActiveWp(res.instance);
+        await refreshArtifacts(res.instance.id);
+        setModalOpen(false);
       } catch (err) {
-        setBriefingError((err as Error).message);
+        setModalError((err as Error).message);
       } finally {
-        setBriefingBusy(false);
+        setModalBusy(false);
       }
     },
-    [briefingSessionId, refreshSessions],
+    [selectedSessionId, refreshArtifacts],
   );
 
-  const handleBriefDismiss = useCallback(() => {
-    if (briefingSessionId != null) skippedRef.current.add(briefingSessionId);
-    setBriefingSessionId(null);
-    setBriefingError(null);
-    setBriefingBusy(false);
-  }, [briefingSessionId]);
+  const handleDismissModal = useCallback(() => {
+    if (selectedSessionId != null)
+      dismissedRef.current.add(selectedSessionId);
+    setModalOpen(false);
+    setModalError(null);
+    setModalBusy(false);
+  }, [selectedSessionId]);
+
+  const handleAdvance = useCallback(
+    async (expectedCurrentStep: number) => {
+      if (activeWp == null) return;
+      setWpBusy(true);
+      try {
+        const res = await gateway.workPackages.advance(activeWp.id, {
+          expectedCurrentStep,
+        });
+        setActiveWp(res.instance);
+        await refreshArtifacts(activeWp.id);
+      } catch {
+        // 사용자에게 토스트 등이 필요하지만 V1 에선 silent — UI 상태 stale 만
+      } finally {
+        setWpBusy(false);
+      }
+    },
+    [activeWp, refreshArtifacts],
+  );
+
+  const handleComplete = useCallback(async () => {
+    if (activeWp == null) return;
+    setWpBusy(true);
+    try {
+      await gateway.workPackages.complete(activeWp.id);
+      await refreshArtifacts(activeWp.id);
+      setActiveWp(null);
+    } catch {
+      // silent
+    } finally {
+      setWpBusy(false);
+    }
+  }, [activeWp, refreshArtifacts]);
+
+  const selectedSession = sessions.find((s) => s.id === selectedSessionId);
+  const activePackageDef = activeWp
+    ? packages.find((p) => p.id === activeWp.packageId)
+    : null;
 
   const sessionsOpen = props.sessionsOpen;
 
   return (
     <div className="relative h-full w-full overflow-hidden">
-      {/* 터미널은 항상 컨테이너 전체 폭을 차지한다. */}
       <section className="absolute inset-0">
         <TerminalPanel sessionId={selectedSessionId} />
       </section>
 
-      {/* 우측 슬라이드 오버레이 패널 — AppHeader 의 Sessions 토글에서 아래로 내려온다. */}
       <aside
         aria-label="Sessions"
         aria-hidden={!sessionsOpen}
@@ -178,11 +272,23 @@ export function TerminalTab(props: {
           />
         )}
 
+        {activeWp && activePackageDef && (
+          <ActivePackageCard
+            instance={activeWp}
+            stepTitles={activePackageDef.stepTitles}
+            packageTitle={activePackageDef.title}
+            artifacts={artifacts}
+            busy={wpBusy}
+            onAdvance={handleAdvance}
+            onComplete={handleComplete}
+          />
+        )}
+
         <SessionList
           sessions={sessions}
           activeWorkspaceId={props.activeWorkspaceId}
           selectedId={selectedSessionId}
-          onSelect={handleSelectSession}
+          onSelect={setSelectedSessionId}
           onKill={async (id) => {
             await gateway.sessions.remove(id);
             refreshSessions();
@@ -190,12 +296,14 @@ export function TerminalTab(props: {
         />
       </aside>
 
-      <BriefingFormModal
-        open={briefingSessionId != null}
-        busy={briefingBusy}
-        errorMessage={briefingError}
-        onSubmit={handleBriefSubmit}
-        onDismiss={handleBriefDismiss}
+      <WorkPackageModal
+        open={modalOpen}
+        packages={packages}
+        sessionCli={selectedSession?.cli ?? "claude"}
+        busy={modalBusy}
+        errorMessage={modalError}
+        onStart={handleStart}
+        onDismiss={handleDismissModal}
       />
     </div>
   );
