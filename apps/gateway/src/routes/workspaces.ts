@@ -10,16 +10,35 @@ import {
 } from "@agent-desk/shared";
 import type { DbHandle } from "../db";
 import type { TmuxClient } from "../tmux/commands";
-import { ensureAllSkillsInstalled } from "../skills/install";
+import {
+  ensureAllSkillsInstalled,
+  ensureHarnessInstalled,
+} from "../skills/install";
+
+type WorkspaceRow = typeof workspaces.$inferSelect;
+
+function toWorkspaceDto(w: WorkspaceRow) {
+  return {
+    id: w.id,
+    name: w.name,
+    path: w.path,
+    createdAt: w.createdAt,
+    deletedAt: w.deletedAt,
+    harnessEnabled: w.harnessEnabled === 1,
+  };
+}
 
 export function workspaceRoutes(opts: {
   db: DbHandle["db"];
   tmux: TmuxClient;
   /** Override skills bulk-installer for tests. */
   ensureAllSkillsFn?: typeof ensureAllSkillsInstalled;
+  /** Override harness single-skill installer for tests. */
+  ensureHarnessFn?: typeof ensureHarnessInstalled;
 }): Hono {
   const { db, tmux } = opts;
   const ensureAllSkills = opts.ensureAllSkillsFn ?? ensureAllSkillsInstalled;
+  const ensureHarness = opts.ensureHarnessFn ?? ensureHarnessInstalled;
   const r = new Hono();
 
   r.get("/", (c) => {
@@ -29,7 +48,7 @@ export function workspaceRoutes(opts: {
       .from(workspaces)
       .where(onlyDeleted ? isNotNull(workspaces.deletedAt) : isNull(workspaces.deletedAt))
       .all();
-    return c.json({ workspaces: rows });
+    return c.json({ workspaces: rows.map(toWorkspaceDto) });
   });
 
   r.post("/", async (c) => {
@@ -57,6 +76,7 @@ export function workspaceRoutes(opts: {
         name: parsed.data.name,
         path: parsed.data.path,
         createdAt: Date.now(),
+        harnessEnabled: parsed.data.harnessEnabled ? 1 : 0,
       })
       .returning()
       .all();
@@ -67,7 +87,15 @@ export function workspaceRoutes(opts: {
     } catch (err) {
       console.warn("[workspaces] skill install on create failed:", err);
     }
-    return c.json(inserted[0], 201);
+    // harnessEnabled=true 인 경우 추가로 vendor/harness 단일 스킬을 symlink.
+    if (parsed.data.harnessEnabled) {
+      try {
+        await ensureHarness({ workspacePath: inserted[0].path });
+      } catch (err) {
+        console.warn("[workspaces] harness install failed:", err);
+      }
+    }
+    return c.json(toWorkspaceDto(inserted[0]), 201);
   });
 
   r.delete("/:id", async (c) => {
@@ -108,7 +136,7 @@ export function workspaceRoutes(opts: {
     if (!Number.isInteger(id)) return c.json({ error: "bad_id" }, 400);
     const ws = db.select().from(workspaces).where(eq(workspaces.id, id)).get();
     if (!ws) return c.json({ error: "not_found" }, 404);
-    if (ws.deletedAt == null) return c.json(ws);
+    if (ws.deletedAt == null) return c.json(toWorkspaceDto(ws));
     const collision = db
       .select()
       .from(workspaces)
@@ -121,7 +149,7 @@ export function workspaceRoutes(opts: {
       .where(eq(workspaces.id, id))
       .returning()
       .all();
-    return c.json(restored[0]);
+    return c.json(toWorkspaceDto(restored[0]));
   });
 
   r.delete("/:id/permanent", (c) => {

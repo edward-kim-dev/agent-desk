@@ -6,6 +6,7 @@ export const workspaces = sqliteTable("workspaces", {
   name: text("name").notNull(),
   createdAt: integer("created_at").notNull(),
   deletedAt: integer("deleted_at"),
+  harnessEnabled: integer("harness_enabled").notNull().default(0),
 });
 
 export const sessions = sqliteTable("sessions", {

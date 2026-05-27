@@ -17,6 +17,23 @@ export function envWithoutDebug(
   return clean;
 }
 
+function shellQuoteValue(v: string): string {
+  if (/^[A-Za-z0-9_.\/=:+-]+$/.test(v)) return v;
+  return `'${v.replace(/'/g, `'\\''`)}'`;
+}
+
+function envPrefix(env: Record<string, string> | undefined): string {
+  if (!env) return "";
+  const pairs: string[] = [];
+  for (const [k, v] of Object.entries(env)) {
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(k)) {
+      throw new Error(`invalid env key: ${k}`);
+    }
+    pairs.push(`${k}=${shellQuoteValue(v)}`);
+  }
+  return pairs.length ? pairs.join(" ") + " " : "";
+}
+
 export interface ExecLike {
   (cmd: string, args: string[]): Promise<{ stdout: string; stderr: string }>;
 }
@@ -32,6 +49,8 @@ export interface NewSessionInput {
   name: string;
   cwd: string;
   command: string;
+  /** Extra env vars to prepend to the wrapped command (KEY=VAL form). */
+  env?: Record<string, string>;
 }
 
 export interface TmuxClient {
@@ -92,7 +111,8 @@ export function createTmuxClient(opts: { exec?: ExecLike } = {}): TmuxClient {
     // failure output (e.g. "command not found"). Without this wrap, a fast
     // CLI exit kills the tmux session immediately and the UI shows only a
     // silent reconnect loop.
-    const wrapped = `env ${unsetPrefix} ${input.command}; ec=$?; printf '\\n[CLI exited (%d). Press Ctrl-D to close the session.]\\n' "$ec"; exec "${'$'}{SHELL:-/bin/bash}"`;
+    const setPrefix = envPrefix(input.env);
+    const wrapped = `env ${unsetPrefix} ${setPrefix}${input.command}; ec=$?; printf '\\n[CLI exited (%d). Press Ctrl-D to close the session.]\\n' "$ec"; exec "${'$'}{SHELL:-/bin/bash}"`;
     await exec("tmux", [
       "new-session",
       "-d",

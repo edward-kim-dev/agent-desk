@@ -206,6 +206,124 @@ describe("workspaces 라우트", () => {
     expect(res.status).toBe(409);
     expect(await res.json()).toMatchObject({ error: "not_soft_deleted" });
   });
+
+  it("워크스페이스 생성 시 harnessEnabled 기본값은 0(false)", async () => {
+    const res = await fetch(`${url}/workspaces`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ name: "ws-no-harness", path: "/tmp/ad-test-no-harness" }),
+    });
+    expect(res.status).toBe(201);
+    const ws = await res.json();
+    expect(ws.harnessEnabled).toBe(false);
+  });
+
+  it("harnessEnabled=true 로 워크스페이스 생성 시 DTO 에 true 반영", async () => {
+    const res = await fetch(`${url}/workspaces`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        name: "ws-with-harness",
+        path: "/tmp/ad-test-with-harness",
+        harnessEnabled: true,
+      }),
+    });
+    expect(res.status).toBe(201);
+    const ws = await res.json();
+    expect(ws.harnessEnabled).toBe(true);
+  });
+
+  it("harnessEnabled=true 로 생성하면 harness installer 가 호출된다", async () => {
+    const localDir = mkdtempSync(join(tmpdir(), "ad-ws-harness-on-"));
+    const localHandle = openDatabase({ filePath: join(localDir, "db.sqlite") });
+    const fakeHarness = vi.fn(async () => ({
+      status: "installed" as const,
+      linkPath: "/fake/.claude/skills/harness",
+      sourcePath: "/fake/vendor/harness/skills/harness",
+    }));
+    const built = await createServer({
+      db: localHandle,
+      token: TOKEN,
+      cli: [],
+      bind: "127.0.0.1",
+      port: 0,
+      tmux: {
+        listSessions: async () => [],
+        newSession: async () => {},
+        killSession: async () => {},
+        hasSession: async () => true,
+        sendKeys: async () => {},
+        capturePane: async () => "",
+        paneCurrentCommand: async () => "claude",
+        paneChildren: async () => [],
+      },
+      ensureAllSkillsFn: vi.fn(async () => ({ results: [] })),
+      ensureHarnessFn: fakeHarness,
+      installSkillsOnStartup: false,
+    });
+    const res = await fetch(`${built.url}/workspaces`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        name: "harness-ws",
+        path: "/tmp/ad-test-harness-installer-on",
+        harnessEnabled: true,
+      }),
+    });
+    expect(res.status).toBe(201);
+    expect(fakeHarness).toHaveBeenCalledOnce();
+    expect(fakeHarness).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspacePath: expect.stringContaining("/"),
+      }),
+    );
+    await built.close();
+    localHandle.close();
+    rmSync(localDir, { recursive: true, force: true });
+  });
+
+  it("harnessEnabled=false (기본) 면 harness installer 가 호출되지 않는다", async () => {
+    const localDir = mkdtempSync(join(tmpdir(), "ad-ws-harness-off-"));
+    const localHandle = openDatabase({ filePath: join(localDir, "db.sqlite") });
+    const fakeHarness = vi.fn(async () => ({
+      status: "installed" as const,
+      linkPath: "/fake/.claude/skills/harness",
+      sourcePath: "/fake/vendor/harness/skills/harness",
+    }));
+    const built = await createServer({
+      db: localHandle,
+      token: TOKEN,
+      cli: [],
+      bind: "127.0.0.1",
+      port: 0,
+      tmux: {
+        listSessions: async () => [],
+        newSession: async () => {},
+        killSession: async () => {},
+        hasSession: async () => true,
+        sendKeys: async () => {},
+        capturePane: async () => "",
+        paneCurrentCommand: async () => "claude",
+        paneChildren: async () => [],
+      },
+      ensureAllSkillsFn: vi.fn(async () => ({ results: [] })),
+      ensureHarnessFn: fakeHarness,
+      installSkillsOnStartup: false,
+    });
+    const res = await fetch(`${built.url}/workspaces`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        name: "plain-ws",
+        path: "/tmp/ad-test-harness-installer-off",
+      }),
+    });
+    expect(res.status).toBe(201);
+    expect(fakeHarness).not.toHaveBeenCalled();
+    await built.close();
+    localHandle.close();
+    rmSync(localDir, { recursive: true, force: true });
+  });
 });
 
 describe("기동 시 스킬 일괄 설치", () => {

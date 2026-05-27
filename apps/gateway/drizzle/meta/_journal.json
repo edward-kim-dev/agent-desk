@@ -22,6 +22,13 @@
       "when": 1779775260841,
       "tag": "0002_windy_vulture",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1779848061777,
+      "tag": "0003_moaning_deathstrike",
+      "breakpoints": true
     }
   ]
 }

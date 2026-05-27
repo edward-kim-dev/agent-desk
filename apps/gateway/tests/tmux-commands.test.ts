@@ -84,6 +84,42 @@ describe("tmuxClient", () => {
     expect(wrapped).toContain("${SHELL:-/bin/bash}");
   });
 
+  it("newSession 의 env 옵션이 명령에 KEY=VAL 형태로 주입된다", async () => {
+    const calls: Array<{ cmd: string; args: string[] }> = [];
+    const exec: ExecLike = async (cmd, args) => {
+      calls.push({ cmd, args });
+      return { stdout: "", stderr: "" };
+    };
+    const client = createTmuxClient({ exec });
+    await client.newSession({
+      name: "test-sess",
+      cwd: "/tmp",
+      command: "claude --foo",
+      env: { CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: "1" },
+    });
+    const newSessCall = calls.find((c) => c.args.includes("new-session"));
+    expect(newSessCall).toBeDefined();
+    const wrapped = newSessCall!.args[newSessCall!.args.length - 1];
+    expect(wrapped).toContain("CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1");
+  });
+
+  it("env 옵션이 없으면 환경변수 prefix 가 추가되지 않는다", async () => {
+    const calls: Array<{ cmd: string; args: string[] }> = [];
+    const exec: ExecLike = async (cmd, args) => {
+      calls.push({ cmd, args });
+      return { stdout: "", stderr: "" };
+    };
+    const client = createTmuxClient({ exec });
+    await client.newSession({
+      name: "test-sess",
+      cwd: "/tmp",
+      command: "claude --foo",
+    });
+    const newSessCall = calls.find((c) => c.args.includes("new-session"));
+    const wrapped = newSessCall!.args[newSessCall!.args.length - 1];
+    expect(wrapped).not.toMatch(/[A-Z_]+=/);
+  });
+
   it("이름으로 세션을 종료한다", async () => {
     const exec = mockExec({
       "tmux kill-session -t ad-foo": { stdout: "" },

@@ -5,6 +5,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   ensureAllSkillsInstalled,
+  ensureHarnessInstalled,
   ensureSkillInstalled,
 } from "../src/skills/install";
 
@@ -149,5 +150,44 @@ describe("ensureAllSkillsInstalled", () => {
       vendorSkillsDir: path.join(root, "no-such-dir"),
     });
     expect(r.results).toEqual([]);
+  });
+});
+
+describe("ensureHarnessInstalled", () => {
+  let vendorHarnessDir: string;
+
+  beforeEach(async () => {
+    // vendor/harness/skills/harness 구조 모사
+    vendorHarnessDir = path.join(root, "vendor-harness", "skills", "harness");
+    await fs.mkdir(vendorHarnessDir, { recursive: true });
+    await fs.writeFile(
+      path.join(vendorHarnessDir, "SKILL.md"),
+      "---\nname: harness\n---\nhi\n",
+    );
+  });
+
+  it("vendor/harness/skills/harness 를 워크스페이스 .claude/skills/harness 로 symlink", async () => {
+    const r = await ensureHarnessInstalled({
+      workspacePath,
+      vendorHarnessSkillDir: vendorHarnessDir,
+    });
+    expect(r.status).toBe("installed");
+
+    const linkPath = path.join(workspacePath, ".claude", "skills", "harness");
+    const stat = await fs.lstat(linkPath);
+    expect(stat.isSymbolicLink()).toBe(true);
+    const content = await fs.readFile(
+      path.join(linkPath, "SKILL.md"),
+      "utf8",
+    );
+    expect(content).toContain("name: harness");
+  });
+
+  it("vendor 디렉토리가 없으면 missing_source", async () => {
+    const r = await ensureHarnessInstalled({
+      workspacePath,
+      vendorHarnessSkillDir: path.join(root, "no-such-harness"),
+    });
+    expect(r.status).toBe("missing_source");
   });
 });

@@ -36,7 +36,10 @@ beforeAll(async () => {
   const built = await createServer({
     db: handle,
     token: TOKEN,
-    cli: [{ name: "claude", command: "claude", defaultArgs: [] }],
+    cli: [
+      { name: "claude", command: "claude", defaultArgs: [] },
+      { name: "codex", command: "codex", defaultArgs: [] },
+    ],
     bind: "127.0.0.1",
     port: 0,
     tmux: {
@@ -112,6 +115,77 @@ describe("sessions 라우트", () => {
       sessions: Array<{ status: string }>;
     };
     expect(after.sessions[0].status).toBe("dead");
+  });
+});
+
+describe("sessions 라우트 — harness env 주입", () => {
+  let harnessWsId: number;
+  let plainWsId: number;
+
+  beforeAll(() => {
+    // harnessEnabled=1 워크스페이스
+    const h = handle.db
+      .insert(workspaces)
+      .values({
+        name: "harness-ws",
+        path: "/tmp/harness-ws",
+        harnessEnabled: 1,
+        createdAt: Date.now(),
+      })
+      .returning()
+      .all();
+    harnessWsId = h[0].id;
+
+    // harnessEnabled=0 (기본) 워크스페이스
+    const p = handle.db
+      .insert(workspaces)
+      .values({
+        name: "plain-ws",
+        path: "/tmp/plain-ws",
+        createdAt: Date.now(),
+      })
+      .returning()
+      .all();
+    plainWsId = p[0].id;
+  });
+
+  it("harnessEnabled 워크스페이스에서 claude 세션 생성 시 AGENT_TEAMS env 가 newSession 에 전달된다", async () => {
+    newSession.mockClear();
+    const res = await fetch(`${url}/sessions`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ workspaceId: harnessWsId, cli: "claude", args: [] }),
+    });
+    expect(res.status).toBe(201);
+    expect(newSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        env: { CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: "1" },
+      })
+    );
+  });
+
+  it("harnessEnabled=false 워크스페이스의 claude 세션엔 env 가 주입되지 않는다", async () => {
+    newSession.mockClear();
+    const res = await fetch(`${url}/sessions`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ workspaceId: plainWsId, cli: "claude", args: [] }),
+    });
+    expect(res.status).toBe(201);
+    const call = newSession.mock.calls.at(-1)![0] as { env?: unknown };
+    expect(call.env).toBeUndefined();
+  });
+
+  it("harnessEnabled 워크스페이스라도 cli!=claude 면 env 주입 안 함", async () => {
+    newSession.mockClear();
+    const res = await fetch(`${url}/sessions`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ workspaceId: harnessWsId, cli: "codex", args: [] }),
+    });
+    expect(res.status).toBe(201);
+    const call = newSession.mock.calls.at(-1)![0] as { env?: unknown };
+    expect(call.env).toBeUndefined();
   });
 });
 

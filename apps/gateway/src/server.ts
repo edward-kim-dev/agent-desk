@@ -15,6 +15,7 @@ import { startNightlyCleanupLoop } from "./jobs/nightly-cleanup";
 import type { injectPrompt } from "./tmux/inject";
 import {
   ensureAllSkillsInstalled,
+  ensureHarnessInstalled,
   type ensureSkillInstalled,
 } from "./skills/install";
 import { isNull } from "drizzle-orm";
@@ -34,6 +35,8 @@ export interface CreateServerOptions {
   ensureSkillFn?: typeof ensureSkillInstalled;
   /** Override bulk skill installer. Tests use this to bypass filesystem. */
   ensureAllSkillsFn?: typeof ensureAllSkillsInstalled;
+  /** Override harness single-skill installer. Tests use this to bypass filesystem. */
+  ensureHarnessFn?: typeof ensureHarnessInstalled;
   /** Skip the boot-time bulk skill install. Defaults to running. */
   installSkillsOnStartup?: boolean;
 }
@@ -59,14 +62,23 @@ export async function createServer(
   const ensureAllSkills = opts.ensureAllSkillsFn ?? ensureAllSkillsInstalled;
   api.route(
     "/workspaces",
-    workspaceRoutes({ db: opts.db.db, tmux, ensureAllSkillsFn: ensureAllSkills }),
+    workspaceRoutes({
+      db: opts.db.db,
+      tmux,
+      ensureAllSkillsFn: ensureAllSkills,
+      ensureHarnessFn: opts.ensureHarnessFn,
+    }),
   );
   // 활성 워크스페이스에 vendored 스킬을 일괄 symlink (idempotent).
   // 기동을 지연시키지 않도록 background 로 디스패치.
   if (opts.installSkillsOnStartup !== false) {
+    const ensureHarness = opts.ensureHarnessFn ?? ensureHarnessInstalled;
     void (async () => {
       const rows = opts.db.db
-        .select({ path: workspacesTable.path })
+        .select({
+          path: workspacesTable.path,
+          harnessEnabled: workspacesTable.harnessEnabled,
+        })
         .from(workspacesTable)
         .where(isNull(workspacesTable.deletedAt))
         .all();
@@ -75,6 +87,13 @@ export async function createServer(
           await ensureAllSkills({ workspacePath: ws.path });
         } catch (err) {
           console.warn("[startup] skill install failed for", ws.path, err);
+        }
+        if (ws.harnessEnabled === 1) {
+          try {
+            await ensureHarness({ workspacePath: ws.path });
+          } catch (err) {
+            console.warn("[startup] harness install failed for", ws.path, err);
+          }
         }
       }
     })();

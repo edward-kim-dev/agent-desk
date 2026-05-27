@@ -94,7 +94,17 @@ export function sessionRoutes(opts: {
     const tmuxName = generateSessionName(ws.name);
     const command = [cliEntry.command, ...args].map(shellEscape).join(" ");
 
-    await opts.tmux.newSession({ name: tmuxName, cwd: ws.path, command });
+    const sessionEnv: Record<string, string> = {};
+    if (cliEntry.name === "claude" && ws.harnessEnabled === 1) {
+      sessionEnv.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = "1";
+    }
+
+    await opts.tmux.newSession({
+      name: tmuxName,
+      cwd: ws.path,
+      command,
+      env: Object.keys(sessionEnv).length > 0 ? sessionEnv : undefined,
+    });
 
     const now = Date.now();
     const inserted = opts.db

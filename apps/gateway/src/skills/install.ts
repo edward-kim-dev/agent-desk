@@ -163,3 +163,38 @@ export async function ensureAllSkillsInstalled(opts: {
   );
   return { results };
 }
+
+function defaultVendorHarnessSkillDir(): string {
+  const env = process.env.AGENT_DESK_HARNESS_SKILL_DIR;
+  if (env) return env;
+  const here = fileURLToPath(import.meta.url);
+  const gatewayDir = path.resolve(path.dirname(here), "..", "..");
+  const agentDeskRoot = path.resolve(gatewayDir, "..", "..");
+  return path.join(agentDeskRoot, "vendor", "harness", "skills", "harness");
+}
+
+export interface EnsureHarnessOptions {
+  workspacePath: string;
+  /** Absolute path to vendor/harness/skills/harness (the skill directory itself). */
+  vendorHarnessSkillDir?: string;
+}
+
+/**
+ * Harness 단일 스킬을 워크스페이스의 .claude/skills/harness 로 symlink.
+ * 일반 ensureSkillInstalled 와 동일한 상태 머신을 사용하지만 vendor 디렉토리
+ * 모양이 다르다 (vendor/harness/skills/harness 가 곧 스킬 디렉토리).
+ */
+export async function ensureHarnessInstalled(
+  opts: EnsureHarnessOptions,
+): Promise<EnsureSkillResult> {
+  const skillDir = opts.vendorHarnessSkillDir ?? defaultVendorHarnessSkillDir();
+  // ensureSkillInstalled 는 vendorSkillsDir/<name> 형태로 결합하므로,
+  // skillDir 의 부모를 vendorSkillsDir 로 넘기고 name 은 "harness".
+  const parentDir = path.dirname(skillDir);
+  const skillName = path.basename(skillDir);
+  return ensureSkillInstalled({
+    workspacePath: opts.workspacePath,
+    skillName,
+    vendorSkillsDir: parentDir,
+  });
+}

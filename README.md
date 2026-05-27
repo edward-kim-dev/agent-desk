@@ -39,6 +39,13 @@ pnpm dev
 - `pnpm test` — 모든 워크스페이스 테스트
 - `pnpm typecheck` — composite refs 빌드
 
+## Features
+
+- 워크스페이스별 tmux 세션 관리 (claude / codex / gemini 등)
+- 위키/ADR/Graph 탭, 세션 패널, brainstorming briefing 자동 주입
+- obra/superpowers 스킬 번들 (모든 워크스페이스 자동 symlink)
+- **(Opt-in) RevFactory/harness 통합** — 워크스페이스 생성 시 활성화하면 multi-agent 팀 생성 스킬 자동 install + claude 세션에 `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` 주입. **Claude Max 구독 필요**, codex/gemini 세션에서는 동작하지 않음.
+
 ## 데이터
 
 SQLite DB와 WAL/SHM은 `agent-desk/data/`에 저장되며 `.gitignore`로 커밋되지 않는다. 머신 간 이전은 디렉터리 통째 복사.

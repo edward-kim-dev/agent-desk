@@ -1,9 +1,10 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createServer } from "../src/server";
 import { openDatabase, type DbHandle } from "../src/db";
+import { workspaces as workspacesTable } from "@agent-desk/shared/db/schema";
 
 let dbHandle: DbHandle;
 let dir: string;
@@ -53,5 +54,63 @@ describe("gateway 서버", () => {
       headers: { authorization: "Bearer secret" },
     });
     expect([200, 404]).toContain(res.status);
+  });
+
+  it("기동 시 harnessEnabled 워크스페이스에는 harness 도 install 한다", async () => {
+    const startupDir = mkdtempSync(join(tmpdir(), "ad-srv-startup-"));
+    const startupDb = openDatabase({
+      filePath: join(startupDir, "agent-desk.sqlite"),
+    });
+    startupDb.db
+      .insert(workspacesTable)
+      .values([
+        {
+          name: "h",
+          path: "/tmp/h",
+          createdAt: Date.now(),
+          harnessEnabled: 1,
+        },
+        {
+          name: "n",
+          path: "/tmp/n",
+          createdAt: Date.now(),
+          harnessEnabled: 0,
+        },
+      ])
+      .run();
+
+    const allCalls: string[] = [];
+    const harnessCalls: string[] = [];
+    const fakeAll = vi.fn(async ({ workspacePath }: { workspacePath: string }) => {
+      allCalls.push(workspacePath);
+      return { results: [] };
+    });
+    const fakeHarness = vi.fn(
+      async ({ workspacePath }: { workspacePath: string }) => {
+        harnessCalls.push(workspacePath);
+        return {
+          status: "installed" as const,
+          linkPath: "",
+          sourcePath: "",
+        };
+      },
+    );
+
+    const server = await createServer({
+      db: startupDb,
+      token: "t",
+      cli: [],
+      bind: "127.0.0.1",
+      port: 0,
+      ensureAllSkillsFn: fakeAll,
+      ensureHarnessFn: fakeHarness,
+    });
+    await new Promise((r) => setTimeout(r, 50)); // background dispatch flush
+    await server.close();
+    startupDb.close();
+    rmSync(startupDir, { recursive: true, force: true });
+
+    expect(allCalls.sort()).toEqual(["/tmp/h", "/tmp/n"]);
+    expect(harnessCalls).toEqual(["/tmp/h"]);
   });
 });
