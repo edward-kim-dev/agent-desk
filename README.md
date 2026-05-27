@@ -42,7 +42,8 @@ pnpm dev
 ## Features
 
 - 워크스페이스별 tmux 세션 관리 (claude / codex / gemini 등)
-- 위키/ADR/Graph 탭, 세션 패널, brainstorming briefing 자동 주입
+- 위키/ADR/Graph 탭, 세션 패널
+- **Work packages** — 새 Claude 세션은 패키지(현재 "기획" 1 종)를 선택해 시작. brainstorming → writing-plans 의 2-step 흐름이 UI 의 Next/Complete 로 진행되며 진행 상태와 산출물 sha256 인덱스가 DB 에 기록됨.
 - obra/superpowers 스킬 번들 (모든 워크스페이스 자동 symlink)
 - **(Opt-in) RevFactory/harness 통합** — 워크스페이스 생성 시 활성화하면 multi-agent 팀 생성 스킬 자동 install + claude 세션에 `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` 주입. **Claude Max 구독 필요**, codex/gemini 세션에서는 동작하지 않음.
 
