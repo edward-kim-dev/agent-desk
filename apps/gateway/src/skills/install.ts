@@ -198,3 +198,71 @@ export async function ensureHarnessInstalled(
     vendorSkillsDir: parentDir,
   });
 }
+
+export type RemoveStatus = "removed" | "not_present" | "exists_external" | "error";
+
+export interface EnsureHarnessRemovedResult {
+  status: RemoveStatus;
+  linkPath: string;
+  sourcePath: string;
+  detail?: string;
+}
+
+/**
+ * 우리 vendor 를 가리키는 .claude/skills/harness symlink 면 제거.
+ * 외부 symlink·사용자 디렉토리는 건드리지 않는다 (install 의 미러).
+ */
+export async function ensureHarnessRemoved(
+  opts: EnsureHarnessOptions,
+): Promise<EnsureHarnessRemovedResult> {
+  const skillDir = opts.vendorHarnessSkillDir ?? defaultVendorHarnessSkillDir();
+  const linkParent = path.join(opts.workspacePath, ".claude", "skills");
+  const linkPath = path.join(linkParent, path.basename(skillDir));
+
+  let stat;
+  try {
+    stat = await fs.lstat(linkPath);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+      return { status: "not_present", linkPath, sourcePath: skillDir };
+    }
+    return {
+      status: "error",
+      linkPath,
+      sourcePath: skillDir,
+      detail: (err as Error).message,
+    };
+  }
+
+  if (!stat.isSymbolicLink()) {
+    return {
+      status: "exists_external",
+      linkPath,
+      sourcePath: skillDir,
+      detail: "non-symlink (user owned)",
+    };
+  }
+
+  const target = await fs.readlink(linkPath);
+  const resolved = path.resolve(linkParent, target);
+  if (resolved !== skillDir) {
+    return {
+      status: "exists_external",
+      linkPath,
+      sourcePath: skillDir,
+      detail: `symlink → ${target}`,
+    };
+  }
+
+  try {
+    await fs.unlink(linkPath);
+    return { status: "removed", linkPath, sourcePath: skillDir };
+  } catch (err) {
+    return {
+      status: "error",
+      linkPath,
+      sourcePath: skillDir,
+      detail: (err as Error).message,
+    };
+  }
+}

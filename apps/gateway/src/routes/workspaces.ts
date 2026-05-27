@@ -14,6 +14,7 @@ import type { TmuxClient } from "../tmux/commands";
 import {
   ensureAllSkillsInstalled,
   ensureHarnessInstalled,
+  ensureHarnessRemoved,
 } from "../skills/install";
 
 type WorkspaceRow = typeof workspaces.$inferSelect;
@@ -36,10 +37,14 @@ export function workspaceRoutes(opts: {
   ensureAllSkillsFn?: typeof ensureAllSkillsInstalled;
   /** Override harness single-skill installer for tests. */
   ensureHarnessFn?: typeof ensureHarnessInstalled;
+  /** Override harness symlink remover for tests. */
+  ensureHarnessRemovedFn?: typeof ensureHarnessRemoved;
 }): Hono {
   const { db, tmux } = opts;
   const ensureAllSkills = opts.ensureAllSkillsFn ?? ensureAllSkillsInstalled;
   const ensureHarness = opts.ensureHarnessFn ?? ensureHarnessInstalled;
+  const ensureHarnessGone =
+    opts.ensureHarnessRemovedFn ?? ensureHarnessRemoved;
   const r = new Hono();
 
   r.get("/", (c) => {
@@ -121,13 +126,19 @@ export function workspaceRoutes(opts: {
       .returning()
       .all();
 
-    // 토글 ON 시에만 install. OFF 는 symlink 를 그대로 두고 다음 claude 세션
-    // 부터 env 주입만 끊는다 (재활성화 시 idempotent).
+    // ON 토글: install. OFF 토글: 우리 vendor 를 가리키는 symlink 면 제거
+    // (외부/유저 디렉토리는 그대로 둠). 둘 다 fail-soft.
     if (parsed.data.harnessEnabled) {
       try {
         await ensureHarness({ workspacePath: updated[0].path });
       } catch (err) {
         console.warn("[workspaces] harness install on update failed:", err);
+      }
+    } else {
+      try {
+        await ensureHarnessGone({ workspacePath: updated[0].path });
+      } catch (err) {
+        console.warn("[workspaces] harness remove on update failed:", err);
       }
     }
     return c.json(toWorkspaceDto(updated[0]));

@@ -16,6 +16,7 @@ import type { injectPrompt } from "./tmux/inject";
 import {
   ensureAllSkillsInstalled,
   ensureHarnessInstalled,
+  ensureHarnessRemoved,
   type ensureSkillInstalled,
 } from "./skills/install";
 import { isNull } from "drizzle-orm";
@@ -37,6 +38,8 @@ export interface CreateServerOptions {
   ensureAllSkillsFn?: typeof ensureAllSkillsInstalled;
   /** Override harness single-skill installer. Tests use this to bypass filesystem. */
   ensureHarnessFn?: typeof ensureHarnessInstalled;
+  /** Override harness symlink remover. Tests use this to bypass filesystem. */
+  ensureHarnessRemovedFn?: typeof ensureHarnessRemoved;
   /** Skip the boot-time bulk skill install. Defaults to running. */
   installSkillsOnStartup?: boolean;
 }
@@ -67,6 +70,7 @@ export async function createServer(
       tmux,
       ensureAllSkillsFn: ensureAllSkills,
       ensureHarnessFn: opts.ensureHarnessFn,
+      ensureHarnessRemovedFn: opts.ensureHarnessRemovedFn,
     }),
   );
   // 활성 워크스페이스에 vendored 스킬을 일괄 symlink (idempotent).

@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   ensureAllSkillsInstalled,
   ensureHarnessInstalled,
+  ensureHarnessRemoved,
   ensureSkillInstalled,
 } from "../src/skills/install";
 
@@ -189,5 +190,79 @@ describe("ensureHarnessInstalled", () => {
       vendorHarnessSkillDir: path.join(root, "no-such-harness"),
     });
     expect(r.status).toBe("missing_source");
+  });
+});
+
+describe("ensureHarnessRemoved", () => {
+  let vendorHarnessDir: string;
+
+  beforeEach(async () => {
+    vendorHarnessDir = path.join(root, "vendor-harness", "skills", "harness");
+    await fs.mkdir(vendorHarnessDir, { recursive: true });
+    await fs.writeFile(
+      path.join(vendorHarnessDir, "SKILL.md"),
+      "---\nname: harness\n---\nhi\n",
+    );
+  });
+
+  it("우리 vendor 를 가리키는 symlink 면 제거하고 'removed' 반환", async () => {
+    // 먼저 install
+    await ensureHarnessInstalled({
+      workspacePath,
+      vendorHarnessSkillDir: vendorHarnessDir,
+    });
+    // 제거
+    const r = await ensureHarnessRemoved({
+      workspacePath,
+      vendorHarnessSkillDir: vendorHarnessDir,
+    });
+    expect(r.status).toBe("removed");
+    // 실제로 사라졌는지 확인
+    const linkPath = path.join(workspacePath, ".claude", "skills", "harness");
+    await expect(fs.lstat(linkPath)).rejects.toThrow();
+  });
+
+  it("아무것도 없으면 'not_present'", async () => {
+    const r = await ensureHarnessRemoved({
+      workspacePath,
+      vendorHarnessSkillDir: vendorHarnessDir,
+    });
+    expect(r.status).toBe("not_present");
+  });
+
+  it("다른 곳을 가리키는 symlink 는 건드리지 않고 'exists_external'", async () => {
+    const linkParent = path.join(workspacePath, ".claude", "skills");
+    await fs.mkdir(linkParent, { recursive: true });
+    const externalSource = path.join(root, "external", "harness");
+    await fs.mkdir(externalSource, { recursive: true });
+    await fs.symlink(
+      externalSource,
+      path.join(linkParent, "harness"),
+      "dir",
+    );
+    const r = await ensureHarnessRemoved({
+      workspacePath,
+      vendorHarnessSkillDir: vendorHarnessDir,
+    });
+    expect(r.status).toBe("exists_external");
+    // 외부 symlink 는 그대로
+    const stat = await fs.lstat(path.join(linkParent, "harness"));
+    expect(stat.isSymbolicLink()).toBe(true);
+  });
+
+  it("사용자가 직접 만든 디렉토리도 'exists_external' 로 두고 건드리지 않음", async () => {
+    const userDir = path.join(workspacePath, ".claude", "skills", "harness");
+    await fs.mkdir(userDir, { recursive: true });
+    await fs.writeFile(path.join(userDir, "SKILL.md"), "user-defined");
+    const r = await ensureHarnessRemoved({
+      workspacePath,
+      vendorHarnessSkillDir: vendorHarnessDir,
+    });
+    expect(r.status).toBe("exists_external");
+    const content = await fs.readFile(
+      path.join(userDir, "SKILL.md"),
+      "utf8",
+    );
+    expect(content).toBe("user-defined");
   });
 });

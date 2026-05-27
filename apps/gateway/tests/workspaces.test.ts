@@ -384,11 +384,16 @@ describe("workspaces 라우트", () => {
     rmSync(localDir, { recursive: true, force: true });
   });
 
-  it("PATCH /workspaces/:id { harnessEnabled: false } 는 DTO 만 갱신하고 installer 는 호출하지 않는다", async () => {
+  it("PATCH /workspaces/:id { harnessEnabled: false } 는 installer 대신 remover 를 호출한다", async () => {
     const localDir = mkdtempSync(join(tmpdir(), "ad-ws-patch-off-"));
     const localHandle = openDatabase({ filePath: join(localDir, "db.sqlite") });
     const fakeHarness = vi.fn(async () => ({
       status: "installed" as const,
+      linkPath: "",
+      sourcePath: "",
+    }));
+    const fakeRemove = vi.fn(async () => ({
+      status: "removed" as const,
       linkPath: "",
       sourcePath: "",
     }));
@@ -410,6 +415,7 @@ describe("workspaces 라우트", () => {
       },
       ensureAllSkillsFn: vi.fn(async () => ({ results: [] })),
       ensureHarnessFn: fakeHarness,
+      ensureHarnessRemovedFn: fakeRemove,
       installSkillsOnStartup: false,
     });
     // harness=true 로 생성
@@ -426,6 +432,7 @@ describe("workspaces 라우트", () => {
     ).json();
     expect(created.harnessEnabled).toBe(true);
     fakeHarness.mockClear();
+    fakeRemove.mockClear();
     // 토글 OFF
     const res = await fetch(`${built.url}/workspaces/${created.id}`, {
       method: "PATCH",
@@ -436,6 +443,10 @@ describe("workspaces 라우트", () => {
     const updated = await res.json();
     expect(updated.harnessEnabled).toBe(false);
     expect(fakeHarness).not.toHaveBeenCalled();
+    expect(fakeRemove).toHaveBeenCalledOnce();
+    expect(fakeRemove).toHaveBeenCalledWith(
+      expect.objectContaining({ workspacePath: "/tmp/ad-patch-off" }),
+    );
     await built.close();
     localHandle.close();
     rmSync(localDir, { recursive: true, force: true });
