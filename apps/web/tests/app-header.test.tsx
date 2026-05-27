@@ -3,7 +3,14 @@ import { describe, expect, it, vi } from "vitest";
 import { AppHeader } from "../components/app-header";
 
 const workspaces = [
-  { id: 1, name: "owngo", path: "/workspaces/owngo", createdAt: 0, deletedAt: null },
+  {
+    id: 1,
+    name: "owngo",
+    path: "/workspaces/owngo",
+    createdAt: 0,
+    deletedAt: null,
+    harnessEnabled: false,
+  },
 ];
 
 describe("<AppHeader>", () => {

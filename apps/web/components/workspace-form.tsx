@@ -15,8 +15,10 @@ export function WorkspaceForm(props: {
 }) {
   const nameId = useId();
   const pathId = useId();
+  const harnessId = useId();
   const [name, setName] = useState("");
   const [path, setPath] = useState("");
+  const [harnessEnabled, setHarnessEnabled] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -31,9 +33,14 @@ export function WorkspaceForm(props: {
         setError(null);
         setBusy(true);
         try {
-          await gateway.workspaces.create({ name: name.trim(), path: path.trim() });
+          await gateway.workspaces.create({
+            name: name.trim(),
+            path: path.trim(),
+            harnessEnabled,
+          });
           setName("");
           setPath("");
+          setHarnessEnabled(false);
           props.onCreated();
         } catch (err) {
           const msg = (err as Error).message;
@@ -86,6 +93,21 @@ export function WorkspaceForm(props: {
           className={`${fieldControl} font-mono text-[12.5px]`}
         />
       </Field>
+      <div className="flex flex-col gap-1">
+        <label className="flex items-center gap-2 text-[13px]" htmlFor={harnessId}>
+          <input
+            id={harnessId}
+            type="checkbox"
+            checked={harnessEnabled}
+            onChange={(e) => setHarnessEnabled(e.target.checked)}
+          />
+          <span>harness 활성화 (Claude Code 전용)</span>
+        </label>
+        <p className="ml-6 text-[12px] text-[var(--hill-muted)]">
+          Claude Max 구독 + Agent Teams 실험 기능이 필요합니다.
+          codex / gemini 세션에서는 동작하지 않습니다.
+        </p>
+      </div>
       <div className="flex items-center justify-end gap-2">
         {error && (
           <div role="alert" className="mr-auto text-[12px] text-red-700">
