@@ -98,6 +98,11 @@ export const gateway = {
         method: "POST",
         body: JSON.stringify(input ?? { outcome: "success" }),
       }),
+    scan: (id: number) =>
+      call<{ artifactsDelta: { inserted: number; updatedDrift: number } }>(
+        `work-packages/${id}/scan`,
+        { method: "POST", body: JSON.stringify({}) },
+      ),
   },
   cli: () =>
     call<{

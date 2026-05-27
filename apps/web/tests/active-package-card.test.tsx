@@ -63,6 +63,41 @@ describe("<ActivePackageCard>", () => {
     ).toBe(true);
   });
 
+  it("onScan prop 이 있으면 ↻ 버튼 표시 + 클릭 시 호출", () => {
+    const onScan = vi.fn();
+    render(
+      <ActivePackageCard
+        instance={baseInstance}
+        stepTitles={["Brainstorm", "Write plan"]}
+        packageTitle="기획"
+        artifacts={[]}
+        onAdvance={() => {}}
+        onComplete={() => {}}
+        onScan={onScan}
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: /Scan for new artifacts/i }),
+    );
+    expect(onScan).toHaveBeenCalled();
+  });
+
+  it("onScan prop 이 없으면 ↻ 버튼 렌더링 안 됨", () => {
+    render(
+      <ActivePackageCard
+        instance={baseInstance}
+        stepTitles={["Brainstorm", "Write plan"]}
+        packageTitle="기획"
+        artifacts={[]}
+        onAdvance={() => {}}
+        onComplete={() => {}}
+      />,
+    );
+    expect(
+      screen.queryByRole("button", { name: /Scan for new artifacts/i }),
+    ).toBeNull();
+  });
+
   it("Complete 호출", () => {
     const onComplete = vi.fn();
     render(

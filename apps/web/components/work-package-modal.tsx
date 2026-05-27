@@ -44,15 +44,15 @@ export function WorkPackageModal(props: {
       className="absolute inset-0 z-20 flex items-center justify-center bg-[rgba(26,18,8,0.32)] backdrop-blur-sm"
     >
       <div className="flex w-full max-w-lg flex-col gap-3">
-        <div className="flex items-baseline justify-between gap-2 px-1">
+        <div className="flex items-baseline justify-between gap-2 px-1 text-white drop-shadow-[0_1px_2px_rgba(26,18,8,0.6)]">
           <h2
             id="work-package-title"
-            className="text-[10px] font-semibold uppercase tracking-[0.24em] text-[#1a1208]"
+            className="text-[10px] font-semibold uppercase tracking-[0.24em]"
           >
             Work package — {selected ? selected.title : "select"}
           </h2>
           {selected && (
-            <span className="text-[10px] uppercase tracking-[0.22em] opacity-40">
+            <span className="text-[10px] uppercase tracking-[0.22em] opacity-75">
               {selected.id}
             </span>
           )}

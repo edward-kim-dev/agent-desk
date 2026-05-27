@@ -11,6 +11,7 @@ export function ActivePackageCard(props: {
   busy?: boolean;
   onAdvance: (expectedCurrentStep: number) => void | Promise<void>;
   onComplete: () => void | Promise<void>;
+  onScan?: () => void | Promise<void>;
 }) {
   const total = props.stepTitles.length;
   const current = props.instance.currentStep;
@@ -30,7 +31,23 @@ export function ActivePackageCard(props: {
           Step {current}/{total} · {currentTitle}
         </span>
       </div>
-      <ArtifactList artifacts={props.artifacts} />
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <ArtifactList artifacts={props.artifacts} />
+        </div>
+        {props.onScan && (
+          <button
+            type="button"
+            aria-label="Scan for new artifacts"
+            title="Scan for new artifacts"
+            onClick={() => props.onScan?.()}
+            disabled={props.busy}
+            className="shrink-0 border border-[var(--hill-rule)] px-1.5 py-0.5 text-[11px] leading-none transition-colors hover:bg-[var(--hill-bg-2)] hover:border-[#1a1208] disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            ↻
+          </button>
+        )}
+      </div>
       <div className="flex items-center justify-end gap-2">
         <button
           type="button"

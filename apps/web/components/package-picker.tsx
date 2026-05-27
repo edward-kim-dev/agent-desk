@@ -23,7 +23,14 @@ export function PackagePicker(props: {
               disabled={!cliOk}
               title={!cliOk ? `${p.cliRequirement} CLI 필요` : undefined}
               aria-label={p.title}
-              className="w-full text-left p-3 border border-[var(--hill-rule)] hover:bg-[var(--hill-bg-2)] disabled:opacity-40 disabled:cursor-not-allowed"
+              className={[
+                "group w-full text-left p-3 border border-[var(--hill-rule)] bg-[var(--background)]",
+                "transition-all duration-150",
+                "hover:border-[#1a1208] hover:bg-[var(--hill-bg-2)] hover:shadow-[0_2px_8px_-2px_rgba(26,18,8,0.18)]",
+                "focus-visible:outline-none focus-visible:border-[#1a1208] focus-visible:ring-2 focus-visible:ring-[rgba(26,18,8,0.18)]",
+                "active:translate-y-[1px]",
+                "disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-[var(--hill-rule)] disabled:hover:bg-[var(--background)] disabled:hover:shadow-none",
+              ].join(" ")}
               onClick={() => props.onSelect(p.id)}
             >
               <div className="flex items-baseline justify-between gap-2">

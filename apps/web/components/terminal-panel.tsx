@@ -91,6 +91,18 @@ export function TerminalPanel(props: { sessionId: number | null }) {
       return true;
     });
 
+    // alt buffer (full-screen TUI — claude/codex REPL 등) 에선 xterm.js 의 default
+    // 가 mouse wheel 을 arrow keys 로 변환한다. 그 결과 wheel 스크롤이 REPL 의
+    // history navigation 으로 잘못 해석된다. 항상 scrollback 으로만 처리.
+    term.attachCustomWheelEventHandler((e: WheelEvent) => {
+      const linesPerNotch = e.deltaMode === 0 ? 24 : 1; // pixel vs line mode
+      const lines = Math.trunc(e.deltaY / linesPerNotch);
+      if (lines === 0) return false;
+      term.scrollLines(lines);
+      e.preventDefault();
+      return false;
+    });
+
     term.onData((data) => send(data));
     termRef.current = term;
     fitRef.current = fit;

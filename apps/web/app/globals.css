@@ -24,6 +24,7 @@
   --background: #ffffff;
   --foreground: #1a1208;
   --hill-rule: rgba(26, 18, 8, 0.12);
+  --hill-bg-2: rgba(26, 18, 8, 0.04);
 }
 
 @theme inline {

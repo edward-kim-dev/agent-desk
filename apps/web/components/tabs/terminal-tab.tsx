@@ -232,6 +232,19 @@ export function TerminalTab(props: {
     }
   }, [activeWp, refreshArtifacts]);
 
+  const handleScan = useCallback(async () => {
+    if (activeWp == null) return;
+    setWpBusy(true);
+    try {
+      await gateway.workPackages.scan(activeWp.id);
+      await refreshArtifacts(activeWp.id);
+    } catch {
+      // silent
+    } finally {
+      setWpBusy(false);
+    }
+  }, [activeWp, refreshArtifacts]);
+
   const selectedSession = sessions.find((s) => s.id === selectedSessionId);
   const activePackageDef = activeWp
     ? packages.find((p) => p.id === activeWp.packageId)
@@ -281,6 +294,7 @@ export function TerminalTab(props: {
             busy={wpBusy}
             onAdvance={handleAdvance}
             onComplete={handleComplete}
+            onScan={handleScan}
           />
         )}
 
