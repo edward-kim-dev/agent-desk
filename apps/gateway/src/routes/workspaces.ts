@@ -6,6 +6,7 @@ import {
   createWorkspaceRequest,
   sessionEvents,
   sessions,
+  updateWorkspaceRequest,
   workspaces,
 } from "@agent-desk/shared";
 import type { DbHandle } from "../db";
@@ -96,6 +97,40 @@ export function workspaceRoutes(opts: {
       }
     }
     return c.json(toWorkspaceDto(inserted[0]), 201);
+  });
+
+  r.patch("/:id", async (c) => {
+    const id = Number(c.req.param("id"));
+    if (!Number.isInteger(id)) return c.json({ error: "bad_id" }, 400);
+    const parsed = updateWorkspaceRequest.safeParse(await c.req.json());
+    if (!parsed.success) {
+      return c.json(
+        { error: "invalid_request", details: parsed.error.format() },
+        400,
+      );
+    }
+    const ws = db.select().from(workspaces).where(eq(workspaces.id, id)).get();
+    if (!ws) return c.json({ error: "not_found" }, 404);
+    if (ws.deletedAt != null)
+      return c.json({ error: "workspace_soft_deleted" }, 409);
+
+    const updated = db
+      .update(workspaces)
+      .set({ harnessEnabled: parsed.data.harnessEnabled ? 1 : 0 })
+      .where(eq(workspaces.id, id))
+      .returning()
+      .all();
+
+    // 토글 ON 시에만 install. OFF 는 symlink 를 그대로 두고 다음 claude 세션
+    // 부터 env 주입만 끊는다 (재활성화 시 idempotent).
+    if (parsed.data.harnessEnabled) {
+      try {
+        await ensureHarness({ workspacePath: updated[0].path });
+      } catch (err) {
+        console.warn("[workspaces] harness install on update failed:", err);
+      }
+    }
+    return c.json(toWorkspaceDto(updated[0]));
   });
 
   r.delete("/:id", async (c) => {

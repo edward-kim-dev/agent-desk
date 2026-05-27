@@ -324,6 +324,148 @@ describe("workspaces 라우트", () => {
     localHandle.close();
     rmSync(localDir, { recursive: true, force: true });
   });
+
+  it("PATCH /workspaces/:id { harnessEnabled: true } 는 DTO 를 갱신하고 installer 를 호출한다", async () => {
+    const localDir = mkdtempSync(join(tmpdir(), "ad-ws-patch-on-"));
+    const localHandle = openDatabase({ filePath: join(localDir, "db.sqlite") });
+    const fakeHarness = vi.fn(async () => ({
+      status: "installed" as const,
+      linkPath: "/fake/.claude/skills/harness",
+      sourcePath: "/fake/vendor/harness/skills/harness",
+    }));
+    const built = await createServer({
+      db: localHandle,
+      token: TOKEN,
+      cli: [],
+      bind: "127.0.0.1",
+      port: 0,
+      tmux: {
+        listSessions: async () => [],
+        newSession: async () => {},
+        killSession: async () => {},
+        hasSession: async () => true,
+        sendKeys: async () => {},
+        capturePane: async () => "",
+        paneCurrentCommand: async () => "claude",
+        paneChildren: async () => [],
+      },
+      ensureAllSkillsFn: vi.fn(async () => ({ results: [] })),
+      ensureHarnessFn: fakeHarness,
+      installSkillsOnStartup: false,
+    });
+    // harness=false 로 워크스페이스 하나 생성
+    const created = await (
+      await fetch(`${built.url}/workspaces`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ name: "patch-on", path: "/tmp/ad-patch-on" }),
+      })
+    ).json();
+    expect(created.harnessEnabled).toBe(false);
+    fakeHarness.mockClear();
+    // 토글 ON
+    const res = await fetch(`${built.url}/workspaces/${created.id}`, {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({ harnessEnabled: true }),
+    });
+    expect(res.status).toBe(200);
+    const updated = await res.json();
+    expect(updated.harnessEnabled).toBe(true);
+    expect(updated.id).toBe(created.id);
+    expect(updated.name).toBe("patch-on");
+    expect(updated.path).toBe("/tmp/ad-patch-on");
+    expect(fakeHarness).toHaveBeenCalledOnce();
+    expect(fakeHarness).toHaveBeenCalledWith(
+      expect.objectContaining({ workspacePath: "/tmp/ad-patch-on" }),
+    );
+    await built.close();
+    localHandle.close();
+    rmSync(localDir, { recursive: true, force: true });
+  });
+
+  it("PATCH /workspaces/:id { harnessEnabled: false } 는 DTO 만 갱신하고 installer 는 호출하지 않는다", async () => {
+    const localDir = mkdtempSync(join(tmpdir(), "ad-ws-patch-off-"));
+    const localHandle = openDatabase({ filePath: join(localDir, "db.sqlite") });
+    const fakeHarness = vi.fn(async () => ({
+      status: "installed" as const,
+      linkPath: "",
+      sourcePath: "",
+    }));
+    const built = await createServer({
+      db: localHandle,
+      token: TOKEN,
+      cli: [],
+      bind: "127.0.0.1",
+      port: 0,
+      tmux: {
+        listSessions: async () => [],
+        newSession: async () => {},
+        killSession: async () => {},
+        hasSession: async () => true,
+        sendKeys: async () => {},
+        capturePane: async () => "",
+        paneCurrentCommand: async () => "claude",
+        paneChildren: async () => [],
+      },
+      ensureAllSkillsFn: vi.fn(async () => ({ results: [] })),
+      ensureHarnessFn: fakeHarness,
+      installSkillsOnStartup: false,
+    });
+    // harness=true 로 생성
+    const created = await (
+      await fetch(`${built.url}/workspaces`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          name: "patch-off",
+          path: "/tmp/ad-patch-off",
+          harnessEnabled: true,
+        }),
+      })
+    ).json();
+    expect(created.harnessEnabled).toBe(true);
+    fakeHarness.mockClear();
+    // 토글 OFF
+    const res = await fetch(`${built.url}/workspaces/${created.id}`, {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({ harnessEnabled: false }),
+    });
+    expect(res.status).toBe(200);
+    const updated = await res.json();
+    expect(updated.harnessEnabled).toBe(false);
+    expect(fakeHarness).not.toHaveBeenCalled();
+    await built.close();
+    localHandle.close();
+    rmSync(localDir, { recursive: true, force: true });
+  });
+
+  it("PATCH /workspaces/:id 존재하지 않으면 404", async () => {
+    const res = await fetch(`${url}/workspaces/99999`, {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({ harnessEnabled: true }),
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it("PATCH /workspaces/:id 잘못된 페이로드는 400", async () => {
+    // 기존 워크스페이스 하나 만들고 잘못된 body 로 PATCH
+    const created = await (
+      await fetch(`${url}/workspaces`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ name: "bad-patch", path: "/tmp/ad-bad-patch" }),
+      })
+    ).json();
+    const res = await fetch(`${url}/workspaces/${created.id}`, {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({ harnessEnabled: "yes" }),
+    });
+    expect(res.status).toBe(400);
+  });
 });
 
 describe("기동 시 스킬 일괄 설치", () => {

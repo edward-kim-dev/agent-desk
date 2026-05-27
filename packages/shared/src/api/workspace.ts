@@ -7,6 +7,11 @@ export const createWorkspaceRequest = z.object({
 });
 export type CreateWorkspaceRequest = z.infer<typeof createWorkspaceRequest>;
 
+export const updateWorkspaceRequest = z.object({
+  harnessEnabled: z.boolean(),
+});
+export type UpdateWorkspaceRequest = z.infer<typeof updateWorkspaceRequest>;
+
 export const workspaceDto = z.object({
   id: z.number().int(),
   name: z.string(),
