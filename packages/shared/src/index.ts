@@ -5,4 +5,6 @@ export * from "./db/types";
 export * from "./api/workspace";
 export * from "./api/session";
 export * from "./api/wiki";
+export * from "./api/work-package";
 export * from "./cli/catalog";
+export * from "./packages";

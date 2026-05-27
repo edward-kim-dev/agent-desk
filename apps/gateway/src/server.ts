@@ -8,6 +8,7 @@ import type { CliEntry } from "@agent-desk/shared";
 import { workspaceRoutes } from "./routes/workspaces";
 import { sessionRoutes } from "./routes/sessions";
 import { wikiRoutes } from "./routes/wiki";
+import { workPackageRoutes } from "./routes/work-packages";
 import { createTmuxClient, type TmuxClient } from "./tmux/commands";
 import { attachWsServer } from "./ws/attach-server";
 import { startDiscoveryLoop } from "./tmux/discover";
@@ -109,10 +110,19 @@ export async function createServer(
       db: opts.db.db,
       tmux,
       cli: opts.cli,
-      injectFn: opts.injectFn,
-      ensureSkillFn: opts.ensureSkillFn,
     }),
   );
+
+  const wp = workPackageRoutes({
+    db: opts.db.db,
+    tmux,
+    injectFn: opts.injectFn,
+    ensureSkillFn: opts.ensureSkillFn,
+  });
+  api.route("/packages", wp.catalog);
+  api.route("/sessions", wp.sessionScoped);
+  api.route("/work-packages", wp.instanceScoped);
+
   app.route("/", api);
 
   const server = await new Promise<ServerType>((resolve) => {

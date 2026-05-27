@@ -1,7 +1,6 @@
 import { Hono } from "hono";
 import { eq } from "drizzle-orm";
 import {
-  brainstormingBriefRequest,
   createSessionRequest,
   sessions,
   sessionEvents,
@@ -12,8 +11,6 @@ import {
 import type { DbHandle } from "../db";
 import { generateSessionName } from "../util/slug";
 import type { TmuxClient } from "../tmux/commands";
-import { injectPrompt, type InjectResult } from "../tmux/inject";
-import { ensureSkillInstalled, type EnsureSkillResult } from "../skills/install";
 
 function shellEscape(s: string): string {
   if (/^[A-Za-z0-9_.\/=:-]+$/.test(s)) return s;
@@ -34,41 +31,14 @@ function toDto(s: SessionRow): SessionDto {
     attachedClients: 0,
     lastActivityAt: s.lastActivityAt,
     createdAt: s.createdAt,
-    briefedAt: s.briefedAt,
   };
-}
-
-function formatBrainstormingPrompt(payload: {
-  topic: string;
-  context?: string;
-  constraints?: string;
-  goals?: string;
-}): string {
-  const parts: string[] = [];
-  parts.push(`Topic: ${payload.topic}`);
-  if (payload.context?.trim()) parts.push(`Context: ${payload.context.trim()}`);
-  if (payload.constraints?.trim())
-    parts.push(`Constraints: ${payload.constraints.trim()}`);
-  if (payload.goals?.trim()) parts.push(`Goals: ${payload.goals.trim()}`);
-  // Slash command + structured one-liner. Newlines are replaced with " · " so the
-  // entire payload fits a single Enter-terminated REPL message.
-  const sanitized = parts
-    .map((p) => p.replace(/\r?\n/g, " · "))
-    .join(" · ");
-  return `/brainstorming ${sanitized}`;
 }
 
 export function sessionRoutes(opts: {
   db: DbHandle["db"];
   tmux: TmuxClient;
   cli: CliEntry[];
-  /** Override injection runner for tests. */
-  injectFn?: typeof injectPrompt;
-  /** Override skill installer for tests. */
-  ensureSkillFn?: typeof ensureSkillInstalled;
 }): Hono {
-  const inject = opts.injectFn ?? injectPrompt;
-  const ensureSkill = opts.ensureSkillFn ?? ensureSkillInstalled;
   const r = new Hono();
 
   r.get("/", (c) => {
@@ -158,96 +128,6 @@ export function sessionRoutes(opts: {
       })
       .run();
     return c.body(null, 204);
-  });
-
-  r.post("/:id/brief", async (c) => {
-    const id = Number(c.req.param("id"));
-    if (!Number.isInteger(id)) return c.json({ error: "bad_id" }, 400);
-
-    const s = opts.db.select().from(sessions).where(eq(sessions.id, id)).get();
-    if (!s) return c.json({ error: "not_found" }, 404);
-    if (s.status !== "active") return c.json({ error: "session_dead" }, 409);
-    if (s.briefedAt != null) return c.json({ error: "already_briefed" }, 409);
-    if (s.cli !== "claude") return c.json({ error: "cli_not_supported" }, 400);
-
-    const parsed = brainstormingBriefRequest.safeParse(await c.req.json());
-    if (!parsed.success) return c.json({ error: "invalid_request" }, 400);
-
-    // JIT 스킬 설치 — 워크스페이스 의 .claude/skills/brainstorming 을
-    // vendor/superpowers/skills/brainstorming 으로 symlink. 워크스페이스 경로가
-    // 비어 있거나 vendor source 가 없으면 fail-fast 한다 (실패해도 ws path 만
-    // 채워졌으면 그대로 inject 시도 → 클로드가 스킬 없다고 답할 뿐).
-    const ws = opts.db
-      .select()
-      .from(workspaces)
-      .where(eq(workspaces.id, s.workspaceId!))
-      .get();
-    let installResult: EnsureSkillResult | null = null;
-    if (ws) {
-      installResult = await ensureSkill({
-        workspacePath: ws.path,
-        skillName: "brainstorming",
-      });
-    }
-
-    const prompt = formatBrainstormingPrompt(parsed.data);
-
-    let result: InjectResult;
-    try {
-      result = await inject({
-        tmux: opts.tmux,
-        name: s.tmuxName,
-        prompt,
-      });
-    } catch (err) {
-      result = {
-        injected: false,
-        reason: "tmux_error",
-        detail: (err as Error).message,
-      };
-    }
-
-    const at = Date.now();
-    if (result.injected) {
-      opts.db
-        .update(sessions)
-        .set({ briefedAt: at, lastActivityAt: at })
-        .where(eq(sessions.id, id))
-        .run();
-      opts.db
-        .insert(sessionEvents)
-        .values({
-          sessionId: id,
-          kind: "briefed",
-          payloadJson: JSON.stringify({
-            topic: parsed.data.topic,
-            skillInstall: installResult,
-          }),
-          at,
-        })
-        .run();
-      const updated = opts.db
-        .select()
-        .from(sessions)
-        .where(eq(sessions.id, id))
-        .get();
-      return c.json({ session: toDto(updated!), result, install: installResult }, 200);
-    }
-
-    opts.db
-      .insert(sessionEvents)
-      .values({
-        sessionId: id,
-        kind: "brief-failed",
-        payloadJson: JSON.stringify({
-          reason: result.reason,
-          detail: result.detail,
-          skillInstall: installResult,
-        }),
-        at,
-      })
-      .run();
-    return c.json({ session: toDto(s), result, install: installResult }, 502);
   });
 
   return r;

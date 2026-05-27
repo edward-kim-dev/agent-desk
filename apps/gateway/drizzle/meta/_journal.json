@@ -29,6 +29,13 @@
       "when": 1779848061777,
       "tag": "0003_moaning_deathstrike",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1779867549461,
+      "tag": "0004_brief_sunspot",
+      "breakpoints": true
     }
   ]
 }
