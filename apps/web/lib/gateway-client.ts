@@ -2,6 +2,7 @@ import type {
   BrainstormingBriefRequest,
   CreateSessionRequest,
   CreateWorkspaceRequest,
+  UpdateWorkspaceRequest,
   WorkspaceDto,
   SessionDto,
 } from "@agent-desk/shared";
@@ -35,6 +36,11 @@ export const gateway = {
     create: (input: CreateWorkspaceRequest) =>
       call<WorkspaceDto>(`workspaces`, {
         method: "POST",
+        body: JSON.stringify(input),
+      }),
+    update: (id: number, input: UpdateWorkspaceRequest) =>
+      call<WorkspaceDto>(`workspaces/${id}`, {
+        method: "PATCH",
         body: JSON.stringify(input),
       }),
     remove: (id: number) =>

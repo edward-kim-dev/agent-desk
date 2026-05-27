@@ -51,6 +51,16 @@ export function WorkspacesSubview(props: { onChanged: () => void }) {
       <ActiveSection
         items={active}
         onRequestDelete={(w) => setPending({ kind: "soft-delete", workspace: w })}
+        onToggleHarness={async (w, next) => {
+          setError(null);
+          try {
+            await gateway.workspaces.update(w.id, { harnessEnabled: next });
+          } catch (e) {
+            setError((e as Error).message);
+            return;
+          }
+          await notifyChange();
+        }}
       />
       <AddWorkspaceSection
         conflictHint={conflictHint}
@@ -192,7 +202,9 @@ export function WorkspacesSubview(props: { onChanged: () => void }) {
 function ActiveSection(props: {
   items: WorkspaceDto[];
   onRequestDelete: (w: WorkspaceDto) => void;
+  onToggleHarness: (w: WorkspaceDto, next: boolean) => Promise<void>;
 }) {
+  const [busyId, setBusyId] = useState<number | null>(null);
   return (
     <section className="flex flex-col gap-3">
       <SectionHeading
@@ -210,7 +222,7 @@ function ActiveSection(props: {
               key={w.id}
               className="flex items-center justify-between gap-3 px-5 py-3.5"
             >
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <div className="truncate text-[13.5px] text-[#1a1208]">
                   {w.name}
                 </div>
@@ -218,6 +230,25 @@ function ActiveSection(props: {
                   {w.path}
                 </div>
               </div>
+              <label
+                className="flex items-center gap-1.5 text-[12px] opacity-75"
+                title="Claude Max 구독 + Agent Teams 실험 기능 필요. codex/gemini 세션에서는 동작하지 않습니다."
+              >
+                <input
+                  type="checkbox"
+                  checked={w.harnessEnabled}
+                  disabled={busyId === w.id}
+                  onChange={async (e) => {
+                    setBusyId(w.id);
+                    try {
+                      await props.onToggleHarness(w, e.target.checked);
+                    } finally {
+                      setBusyId(null);
+                    }
+                  }}
+                />
+                <span>harness</span>
+              </label>
               <button
                 type="button"
                 onClick={() => props.onRequestDelete(w)}
