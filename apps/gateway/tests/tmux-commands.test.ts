@@ -130,12 +130,27 @@ describe("tmuxClient", () => {
 
   it("sendKeys 는 -- 구분자를 써서 leading-dash 텍스트를 안전하게 전달한다", async () => {
     const exec = mockExec({
-      "tmux send-keys -t ad-foo -- -hello Enter": { stdout: "" },
+      "tmux send-keys -t ad-foo -- -hello": { stdout: "" },
+      "tmux send-keys -t ad-foo Enter": { stdout: "" },
       "tmux send-keys -t ad-foo -- ping": { stdout: "" },
     });
     const client = createTmuxClient({ exec });
     await client.sendKeys("ad-foo", "-hello", true);
     await client.sendKeys("ad-foo", "ping", false);
+  });
+
+  it("withEnter=true 시 text 와 Enter 를 별도 send-keys 호출로 분리한다 (paste 휴리스틱 회피)", async () => {
+    const calls: string[] = [];
+    const exec = async (cmd: string, args: string[] = []) => {
+      calls.push(`${cmd} ${args.join(" ")}`);
+      return { stdout: "" };
+    };
+    const client = createTmuxClient({ exec });
+    await client.sendKeys("ad-foo", "/brainstorming Topic: X", true);
+    expect(calls).toEqual([
+      "tmux send-keys -t ad-foo -- /brainstorming Topic: X",
+      "tmux send-keys -t ad-foo Enter",
+    ]);
   });
 
   it("capturePane 은 -p 로 텍스트 덤프를 받는다", async () => {

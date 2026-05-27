@@ -520,6 +520,52 @@ export function workPackageRoutes(opts: WorkPackageRouteOptions): {
     return c.json({ instance: rowToDto(updated!) }, 200);
   });
 
+  // POST /work-packages/:id/scan — inject 없이 디스크 reconcile 만 (수동 ↻)
+  instanceScoped.post("/:id/scan", async (c) => {
+    const id = Number(c.req.param("id"));
+    if (!Number.isInteger(id)) return c.json({ error: "bad_id" }, 400);
+
+    const row = opts.db
+      .select()
+      .from(workPackages)
+      .where(eq(workPackages.id, id))
+      .get();
+    if (!row) return c.json({ error: "not_found" }, 404);
+    if (row.status !== "active")
+      return c.json({ error: "already_completed" }, 409);
+
+    const sessionRow = opts.db
+      .select()
+      .from(sessions)
+      .where(eq(sessions.id, row.sessionId))
+      .get();
+    if (!sessionRow) return c.json({ error: "session_missing" }, 500);
+    const ws = opts.db
+      .select()
+      .from(workspaces)
+      .where(eq(workspaces.id, sessionRow.workspaceId!))
+      .get();
+    if (!ws) return c.json({ error: "workspace_missing" }, 500);
+
+    const previousBaseline = JSON.parse(row.baselineJson) as Record<string, string>;
+    const t = now();
+    const recon = await reconcile({
+      db: opts.db,
+      workPackageId: row.id,
+      stepIndex: row.currentStep,
+      workspacePath: ws.path,
+      previousBaseline,
+      now: t,
+    });
+
+    return c.json({
+      artifactsDelta: {
+        inserted: recon.inserted,
+        updatedDrift: recon.updatedDrift,
+      },
+    }, 200);
+  });
+
   // GET /work-packages/:id/artifacts
   instanceScoped.get("/:id/artifacts", (c) => {
     const id = Number(c.req.param("id"));

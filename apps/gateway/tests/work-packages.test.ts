@@ -465,6 +465,82 @@ describe("POST /work-packages/:id/complete", () => {
   });
 });
 
+describe("POST /work-packages/:id/scan — 수동 디스커버리", () => {
+  it("inject 없이 디스크 reconcile 만 호출 + 신규 파일 INSERT", async () => {
+    const s = handle.db
+      .insert(sessions)
+      .values({
+        tmuxName: "ad-wp-scan",
+        workspaceId,
+        cli: "claude",
+        args: "",
+        status: "active",
+        lastActivityAt: Date.now(),
+        createdAt: Date.now(),
+        adopted: 0,
+      })
+      .returning()
+      .all();
+    const start = await fetch(
+      `${url}/sessions/${s[0].id}/work-packages`,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          packageId: "planning",
+          inputs: { topic: "scan-test" },
+        }),
+      },
+    );
+    const wpId = ((await start.json()) as { instance: { id: number } })
+      .instance.id;
+
+    writeFileSync(
+      join(fsRoot, "docs/superpowers/specs/scan-target.md"),
+      "scan body",
+    );
+
+    injectFn.mockClear();
+    const res = await fetch(`${url}/work-packages/${wpId}/scan`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      artifactsDelta: { inserted: number; updatedDrift: number };
+    };
+    expect(body.artifactsDelta.inserted).toBeGreaterThanOrEqual(1);
+    expect(injectFn).not.toHaveBeenCalled();
+
+    const arts = handle.db
+      .select()
+      .from(workPackageArtifacts)
+      .where(eq(workPackageArtifacts.workPackageId, wpId))
+      .all();
+    expect(
+      arts.some(
+        (a) => a.filePath === "docs/superpowers/specs/scan-target.md",
+      ),
+    ).toBe(true);
+  });
+
+  it("completed 인스턴스는 409", async () => {
+    const done = handle.db
+      .select()
+      .from(workPackages)
+      .where(eq(workPackages.status, "completed"))
+      .get();
+    if (!done) throw new Error("expected completed row");
+    const res = await fetch(`${url}/work-packages/${done.id}/scan`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(409);
+  });
+});
+
 describe("list endpoints", () => {
   it("GET /sessions/:id/work-packages 가 인스턴스 배열을 반환", async () => {
     const res = await fetch(

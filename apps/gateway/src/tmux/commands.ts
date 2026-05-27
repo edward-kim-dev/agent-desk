@@ -138,9 +138,15 @@ export function createTmuxClient(opts: { exec?: ExecLike } = {}): TmuxClient {
   }
 
   async function sendKeys(name: string, text: string, withEnter: boolean): Promise<void> {
-    const args = ["send-keys", "-t", name, "--", text];
-    if (withEnter) args.push("Enter");
-    await exec("tmux", args);
+    // text 와 Enter 를 같은 send-keys 호출로 보내면 tmux 가 두 키를 거의 동시에 PTY 에
+    // 쏟아붓는다. 그러면 Claude/codex CLI 의 paste-detection 휴리스틱이 트리거되어
+    // Enter 가 paste 의 일부로 흡수되고 submit 되지 않는다 (특히 long prompt + multi-byte).
+    // 두 호출로 분리하고 사이에 작은 delay 를 둬서 paste 휴리스틱을 회피한다.
+    await exec("tmux", ["send-keys", "-t", name, "--", text]);
+    if (withEnter) {
+      await new Promise((r) => setTimeout(r, 80));
+      await exec("tmux", ["send-keys", "-t", name, "Enter"]);
+    }
   }
 
   async function capturePane(name: string): Promise<string> {
