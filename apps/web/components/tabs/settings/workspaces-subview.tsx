@@ -1,11 +1,12 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 import type { WorkspaceDto } from "@agent-desk/shared";
 import { gateway } from "@/lib/gateway-client";
 import { WorkspaceForm } from "../../workspace-form";
 import { ConfirmDialog } from "../../confirm-dialog";
 import { SectionHeading } from "../../ui/section-heading";
-import { btnGhost, btnGhostDanger } from "../../ui/button-classes";
+import { btnGhost, btnGhostDanger, btnPrimary } from "../../ui/button-classes";
+import { Field, fieldControl } from "../../ui/field";
 
 type PendingAction =
   | { kind: "soft-delete"; workspace: WorkspaceDto }
@@ -51,13 +52,13 @@ export function WorkspacesSubview(props: { onChanged: () => void }) {
       <ActiveSection
         items={active}
         onRequestDelete={(w) => setPending({ kind: "soft-delete", workspace: w })}
-        onToggleHarness={async (w, next) => {
+        onSave={async (w, patch) => {
           setError(null);
           try {
-            await gateway.workspaces.update(w.id, { harnessEnabled: next });
+            await gateway.workspaces.update(w.id, patch);
           } catch (e) {
             setError((e as Error).message);
-            return;
+            throw e;
           }
           await notifyChange();
         }}
@@ -202,9 +203,14 @@ export function WorkspacesSubview(props: { onChanged: () => void }) {
 function ActiveSection(props: {
   items: WorkspaceDto[];
   onRequestDelete: (w: WorkspaceDto) => void;
-  onToggleHarness: (w: WorkspaceDto, next: boolean) => Promise<void>;
+  onSave: (
+    w: WorkspaceDto,
+    patch: { harnessEnabled: boolean },
+  ) => Promise<void>;
 }) {
-  const [busyId, setBusyId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const editing = props.items.find((w) => w.id === editingId) ?? null;
+
   return (
     <section className="flex flex-col gap-3">
       <SectionHeading
@@ -217,50 +223,150 @@ function ActiveSection(props: {
         </p>
       ) : (
         <ul className="flex flex-col divide-y divide-[var(--hill-rule)] border border-[var(--hill-rule)]">
-          {props.items.map((w) => (
-            <li
-              key={w.id}
-              className="flex items-center justify-between gap-3 px-5 py-3.5"
-            >
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-[13.5px] text-[#1a1208]">
-                  {w.name}
-                </div>
-                <div className="mt-0.5 truncate font-mono text-[11px] opacity-50">
-                  {w.path}
-                </div>
-              </div>
-              <label
-                className="flex items-center gap-1.5 text-[12px] opacity-75"
-                title="Claude Max 구독 + Agent Teams 실험 기능 필요. codex/gemini 세션에서는 동작하지 않습니다."
+          {props.items.map((w) => {
+            const selected = editingId === w.id;
+            return (
+              <li
+                key={w.id}
+                className={`flex items-center justify-between gap-3 px-5 py-3.5 ${selected ? "bg-[#1a1208]/[0.04]" : ""}`}
               >
-                <input
-                  type="checkbox"
-                  checked={w.harnessEnabled}
-                  disabled={busyId === w.id}
-                  onChange={async (e) => {
-                    setBusyId(w.id);
-                    try {
-                      await props.onToggleHarness(w, e.target.checked);
-                    } finally {
-                      setBusyId(null);
-                    }
-                  }}
-                />
-                <span>harness</span>
-              </label>
-              <button
-                type="button"
-                onClick={() => props.onRequestDelete(w)}
-                className={btnGhost}
-              >
-                Delete
-              </button>
-            </li>
-          ))}
+                <button
+                  type="button"
+                  onClick={() =>
+                    setEditingId((prev) => (prev === w.id ? null : w.id))
+                  }
+                  aria-pressed={selected}
+                  className="min-w-0 flex-1 text-left"
+                >
+                  <div className="flex items-center gap-2 truncate text-[13.5px] text-[#1a1208]">
+                    <span className="truncate">{w.name}</span>
+                    {w.harnessEnabled && (
+                      <span className="rounded border border-[var(--hill-rule)] px-1.5 text-[10px] uppercase tracking-wide opacity-60">
+                        harness
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-0.5 truncate font-mono text-[11px] opacity-50">
+                    {w.path}
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => props.onRequestDelete(w)}
+                  className={btnGhost}
+                >
+                  Delete
+                </button>
+              </li>
+            );
+          })}
         </ul>
       )}
+      {editing && (
+        <EditWorkspaceForm
+          workspace={editing}
+          onCancel={() => setEditingId(null)}
+          onSave={async (patch) => {
+            await props.onSave(editing, patch);
+            setEditingId(null);
+          }}
+        />
+      )}
     </section>
+  );
+}
+
+function EditWorkspaceForm(props: {
+  workspace: WorkspaceDto;
+  onCancel: () => void;
+  onSave: (patch: { harnessEnabled: boolean }) => Promise<void>;
+}) {
+  const nameId = useId();
+  const pathId = useId();
+  const harnessId = useId();
+  const [harness, setHarness] = useState(props.workspace.harnessEnabled);
+  const [busy, setBusy] = useState(false);
+
+  // 다른 워크스페이스로 선택이 바뀌면 폼 상태 리셋
+  useEffect(() => {
+    setHarness(props.workspace.harnessEnabled);
+  }, [props.workspace.id, props.workspace.harnessEnabled]);
+
+  const dirty = harness !== props.workspace.harnessEnabled;
+
+  return (
+    <form
+      aria-label={`Edit ${props.workspace.name}`}
+      className="flex flex-col gap-4 border border-[var(--hill-rule)] p-5"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        if (!dirty || busy) return;
+        setBusy(true);
+        try {
+          await props.onSave({ harnessEnabled: harness });
+        } catch {
+          // 에러는 상위 alert 슬롯에 표시됨
+        } finally {
+          setBusy(false);
+        }
+      }}
+    >
+      <div className="text-[12px] opacity-60">
+        Editing{" "}
+        <strong className="font-semibold opacity-90">
+          {props.workspace.name}
+        </strong>
+      </div>
+      <Field htmlFor={nameId} label="Name" hint="이름은 수정할 수 없습니다.">
+        <input
+          id={nameId}
+          value={props.workspace.name}
+          disabled
+          className={`${fieldControl} opacity-60`}
+        />
+      </Field>
+      <Field htmlFor={pathId} label="Path" hint="경로는 수정할 수 없습니다.">
+        <input
+          id={pathId}
+          value={props.workspace.path}
+          disabled
+          className={`${fieldControl} font-mono text-[12.5px] opacity-60`}
+        />
+      </Field>
+      <div className="flex flex-col gap-1">
+        <label className="flex items-center gap-2 text-[13px]" htmlFor={harnessId}>
+          <input
+            id={harnessId}
+            type="checkbox"
+            checked={harness}
+            onChange={(e) => setHarness(e.target.checked)}
+          />
+          <span>harness 활성화 (Claude Code 전용)</span>
+        </label>
+        <p className="ml-6 text-[12px] text-[var(--hill-muted)]">
+          Claude Max 구독 + Agent Teams 실험 기능이 필요합니다.
+          codex / gemini 세션에서는 동작하지 않습니다.
+          토글 해제 시 .claude/skills/harness symlink 가 자동 제거됩니다.
+        </p>
+      </div>
+      <div className="flex items-center justify-end gap-2">
+        <button
+          type="button"
+          onClick={props.onCancel}
+          disabled={busy}
+          className={btnGhost}
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={!dirty || busy}
+          className={btnPrimary}
+        >
+          {busy ? "…" : "Save"}
+        </button>
+      </div>
+    </form>
   );
 }
 

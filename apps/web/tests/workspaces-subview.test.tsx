@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { WorkspacesSubview } from "@/components/tabs/settings/workspaces-subview";
 
 const wsActive = [
@@ -42,36 +48,73 @@ vi.mock("@/lib/gateway-client", () => ({
   },
 }));
 
-describe("<WorkspacesSubview> — harness 토글", () => {
-  it("각 활성 워크스페이스 행에 harness 체크박스가 현재 상태로 렌더된다", async () => {
+async function openEdit(name: "alpha" | "beta") {
+  render(<WorkspacesSubview onChanged={() => {}} />);
+  await waitFor(() => expect(screen.getByText(name)).toBeTruthy());
+  // Active list row 는 button — name 텍스트 가진 button (Cancel/Save/Delete 아님)
+  const row = screen.getAllByRole("button").find((b) => {
+    const t = b.textContent ?? "";
+    return t.includes(name) && t.includes("/tmp/");
+  });
+  if (!row) throw new Error(`row for ${name} not found`);
+  fireEvent.click(row);
+  const form = (await screen.findByRole("form", {
+    name: new RegExp(`Edit ${name}`, "i"),
+  })) as HTMLFormElement;
+  return form;
+}
+
+describe("<WorkspacesSubview> — 클릭→편집 폼", () => {
+  it("처음에는 편집 폼이 없다", async () => {
     render(<WorkspacesSubview onChanged={() => {}} />);
     await waitFor(() => expect(screen.getByText("alpha")).toBeTruthy());
-    const checkboxes = screen.getAllByRole("checkbox") as HTMLInputElement[];
-    // alpha (off), beta (on) 순으로 렌더
-    expect(checkboxes[0].checked).toBe(false);
-    expect(checkboxes[1].checked).toBe(true);
+    expect(screen.queryByRole("form", { name: /Edit /i })).toBeNull();
   });
 
-  it("체크박스 토글 시 PATCH 가 호출된다", async () => {
+  it("워크스페이스 행 클릭 시 하단에 편집 폼이 나타난다 (Save/Cancel)", async () => {
+    const form = await openEdit("alpha");
+    expect(within(form).getByText(/Editing/i)).toBeTruthy();
+    expect(within(form).getByRole("button", { name: /save/i })).toBeTruthy();
+    expect(within(form).getByRole("button", { name: /cancel/i })).toBeTruthy();
+  });
+
+  it("폼 안 name/path 입력은 disabled (수정 불가)", async () => {
+    const form = await openEdit("alpha");
+    const nameInput = within(form).getByLabelText("Name") as HTMLInputElement;
+    const pathInput = within(form).getByLabelText("Path") as HTMLInputElement;
+    expect(nameInput.disabled).toBe(true);
+    expect(pathInput.disabled).toBe(true);
+    expect(nameInput.value).toBe("alpha");
+    expect(pathInput.value).toBe("/tmp/alpha");
+  });
+
+  it("토글 변경 후 Save → PATCH 호출 + 폼 닫힘", async () => {
     update.mockClear();
-    render(<WorkspacesSubview onChanged={() => {}} />);
-    await waitFor(() => expect(screen.getByText("alpha")).toBeTruthy());
-    const checkboxes = screen.getAllByRole("checkbox") as HTMLInputElement[];
-    // alpha (id=1) 토글 ON
-    fireEvent.click(checkboxes[0]);
+    const form = await openEdit("alpha");
+    fireEvent.click(within(form).getByLabelText(/harness 활성화/i));
+    fireEvent.click(within(form).getByRole("button", { name: /save/i }));
     await waitFor(() =>
       expect(update).toHaveBeenCalledWith(1, { harnessEnabled: true }),
     );
+    await waitFor(() =>
+      expect(screen.queryByRole("form", { name: /Edit alpha/i })).toBeNull(),
+    );
   });
 
-  it("beta (id=2) 토글 OFF 는 harnessEnabled=false 로 PATCH", async () => {
+  it("Cancel 클릭 시 PATCH 없이 폼이 닫힌다", async () => {
     update.mockClear();
-    render(<WorkspacesSubview onChanged={() => {}} />);
-    await waitFor(() => expect(screen.getByText("beta")).toBeTruthy());
-    const checkboxes = screen.getAllByRole("checkbox") as HTMLInputElement[];
-    fireEvent.click(checkboxes[1]);
-    await waitFor(() =>
-      expect(update).toHaveBeenCalledWith(2, { harnessEnabled: false }),
-    );
+    const form = await openEdit("beta");
+    fireEvent.click(within(form).getByLabelText(/harness 활성화/i));
+    fireEvent.click(within(form).getByRole("button", { name: /cancel/i }));
+    expect(update).not.toHaveBeenCalled();
+    expect(screen.queryByRole("form", { name: /Edit beta/i })).toBeNull();
+  });
+
+  it("값이 그대로면 Save 버튼은 disabled", async () => {
+    const form = await openEdit("alpha");
+    const save = within(form).getByRole("button", {
+      name: /save/i,
+    }) as HTMLButtonElement;
+    expect(save.disabled).toBe(true);
   });
 });
