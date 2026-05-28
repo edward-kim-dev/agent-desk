@@ -16,42 +16,52 @@ export function StepReadyOverlay({
   onDismiss,
 }: StepReadyOverlayProps) {
   return (
-    <div className="absolute bottom-4 left-4 right-4 z-10 rounded-lg border border-border bg-card p-4 shadow-lg backdrop-blur-sm">
-      <div className="mb-3">
-        <p className="text-sm font-medium text-foreground">
-          📦 <span className="font-semibold">{stepTitle}</span> 완료 감지
-        </p>
-        {nextStepTitle && !isLastStep && (
-          <p className="mt-1 text-xs text-muted-foreground">
-            다음 단계: {nextStepTitle}
-          </p>
-        )}
-      </div>
-      <div className="flex gap-2">
-        {isLastStep ? (
-          <button
-            type="button"
-            onClick={onAdvance}
-            className="flex-1 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
-          >
-            완료로 처리
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={onAdvance}
-            className="flex-1 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
-          >
-            다음 단계로
-          </button>
-        )}
-        <button
-          type="button"
-          onClick={onDismiss}
-          className="rounded-md border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted"
-        >
-          지금은 괜찮아요
-        </button>
+    <div
+      role="dialog"
+      aria-modal="true"
+      className="absolute inset-0 z-10 flex items-center justify-center bg-[rgba(26,18,8,0.32)] backdrop-blur-sm"
+    >
+      <div className="flex w-full max-w-sm flex-col gap-3 px-4">
+        {/* floating label above card — same pattern as WorkPackageModal */}
+        <div className="flex items-baseline justify-between gap-2 px-1 text-white drop-shadow-[0_1px_2px_rgba(26,18,8,0.6)]">
+          <h2 className="text-[10px] font-semibold uppercase tracking-[0.24em]">
+            Step complete
+          </h2>
+          <span className="text-[10px] uppercase tracking-[0.22em] opacity-75">
+            {isLastStep ? "final step" : "next step ready"}
+          </span>
+        </div>
+
+        {/* card */}
+        <div className="flex flex-col gap-4 border border-[var(--hill-rule)] bg-[var(--background)] p-4">
+          <div>
+            <p className="text-[13px] font-semibold text-[#1a1208]">
+              {stepTitle} 완료
+            </p>
+            {nextStepTitle && !isLastStep && (
+              <p className="mt-1 text-[11px] text-[#1a1208]/55">
+                다음: {nextStepTitle}
+              </p>
+            )}
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={onAdvance}
+              className="flex-1 border border-[#1a1208] bg-[#1a1208] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-white transition-all hover:bg-[#1a1208]/90 active:translate-y-[1px]"
+            >
+              {isLastStep ? "완료로 처리" : "다음 단계로"}
+            </button>
+            <button
+              type="button"
+              onClick={onDismiss}
+              className="flex-1 border border-[var(--hill-rule)] px-3 py-2 text-[11px] text-[#1a1208]/55 transition-all hover:border-[rgba(26,18,8,0.35)] hover:bg-[var(--hill-bg-2)] active:translate-y-[1px]"
+            >
+              지금은 괜찮아요
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

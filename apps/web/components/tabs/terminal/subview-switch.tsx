@@ -5,14 +5,14 @@ export function TerminalSubviewSwitch(props: {
   onToggleSessions: () => void;
 }) {
   return (
-    <nav aria-label="터미널 서브뷰" className="flex items-stretch">
+    <nav aria-label="터미널 서브뷰" className="flex items-stretch gap-7">
       <button
         type="button"
         aria-pressed={props.sessionsOpen}
         aria-expanded={props.sessionsOpen}
         onClick={props.onToggleSessions}
         className={[
-          "ml-7 first:ml-0 cursor-pointer bg-transparent",
+          "cursor-pointer bg-transparent",
           "text-[10px] uppercase tracking-[0.24em] text-[#1a1208]",
           "border-t-2 border-x-0 border-b-0 pt-2 pb-0 px-0",
           "flex items-center gap-1.5 transition-opacity",

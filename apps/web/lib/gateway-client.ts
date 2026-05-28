@@ -67,6 +67,11 @@ export const gateway = {
       }),
     remove: (id: number) =>
       fetch(`/api/proxy/sessions/${id}`, { method: "DELETE" }),
+    history: (id: number, lines?: number, signal?: AbortSignal) =>
+      call<{ history: string }>(
+        `sessions/${id}/history${lines ? `?lines=${lines}` : ""}`,
+        signal ? { signal } : undefined,
+      ),
   },
   packages: {
     list: (opts?: AbortOptions) =>
