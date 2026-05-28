@@ -61,6 +61,8 @@ export const workPackageEvents = sqliteTable("work_package_events", {
       "advanced",
       "completed",
       "abandoned",
+      "hook-file",
+      "hook-turn",
     ],
   }).notNull(),
   payloadJson: text("payload_json"),

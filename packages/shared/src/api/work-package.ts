@@ -44,3 +44,15 @@ export const completeWorkPackageRequest = z.object({
   outcome: z.enum(["success", "abandoned"]).default("success"),
 });
 export type CompleteWorkPackageRequest = z.infer<typeof completeWorkPackageRequest>;
+
+export const reportProgressRequest = z.union([
+  z.object({ filePath: z.string().min(1) }),
+  z.object({ lastMessage: z.string().min(1).max(500) }),
+]);
+export type ReportProgressRequest = z.infer<typeof reportProgressRequest>;
+
+export const reportProgressResponse = z.object({
+  recorded: z.boolean(),
+  stepReady: z.boolean().optional(),
+});
+export type ReportProgressResponse = z.infer<typeof reportProgressResponse>;

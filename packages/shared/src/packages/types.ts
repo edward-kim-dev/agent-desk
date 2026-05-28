@@ -26,6 +26,12 @@ export interface StepDefinition<I = unknown> {
   title: string;
   skillName: string;
   promptTemplate: (inputs: I, ctx: StepContext) => string;
+  /**
+   * step 완료 신호로 사용할 artifact 디렉토리.
+   * workspace 상대 경로, 끝에 `/` 포함. 예: "docs/superpowers/specs/"
+   * PostToolUse hook이 쓴 파일 경로가 이 prefix 안에 있으면 step_ready 판단.
+   */
+  completionArtifactDir: string;
 }
 
 export interface PackageDefinition<I = unknown> {

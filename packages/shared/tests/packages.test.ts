@@ -69,3 +69,15 @@ describe("packages registry", () => {
     expect(startWorkPackageRequest.safeParse({ inputs: {} }).success).toBe(false);
   });
 });
+
+describe("planning package completionArtifactDir", () => {
+  it("step 1 completionArtifactDir는 docs/superpowers/specs/ 이다", () => {
+    const step1 = planning.steps.find((s) => s.index === 1);
+    expect(step1?.completionArtifactDir).toBe("docs/superpowers/specs/");
+  });
+
+  it("step 2 completionArtifactDir는 docs/superpowers/plans/ 이다", () => {
+    const step2 = planning.steps.find((s) => s.index === 2);
+    expect(step2?.completionArtifactDir).toBe("docs/superpowers/plans/");
+  });
+});

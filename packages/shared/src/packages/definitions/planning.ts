@@ -58,12 +58,14 @@ export const planning: PackageDefinition<PlanningInputs> = {
       title: "Brainstorm",
       skillName: "brainstorming",
       promptTemplate: (inputs) => formatBrainstormingPrompt(inputs),
+      completionArtifactDir: "docs/superpowers/specs/",
     },
     {
       index: 2,
       title: "Write plan",
       skillName: "writing-plans",
       promptTemplate: () => "/writing-plans",
+      completionArtifactDir: "docs/superpowers/plans/",
     },
   ],
 };
