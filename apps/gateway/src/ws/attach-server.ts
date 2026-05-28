@@ -16,7 +16,7 @@ export function attachWsServer(opts: {
     const url = new URL(req.url ?? "/", "http://localhost");
     const match = url.pathname.match(/^\/sessions\/(\d+)\/attach$/);
     if (!match) {
-      socket.destroy();
+      // Not our path — let other upgrade handlers (e.g. progress-server) process it
       return;
     }
     const tokenFromQuery = url.searchParams.get("token");

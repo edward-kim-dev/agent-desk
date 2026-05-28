@@ -157,14 +157,12 @@ describe("sessions 라우트 — harness env 주입", () => {
       body: JSON.stringify({ workspaceId: harnessWsId, cli: "claude", args: [] }),
     });
     expect(res.status).toBe(201);
-    expect(newSession).toHaveBeenCalledWith(
-      expect.objectContaining({
-        env: { CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: "1" },
-      })
-    );
+    const call = newSession.mock.calls.at(-1)![0] as { env?: Record<string, string> };
+    expect(call.env).toMatchObject({ CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: "1" });
+    expect(call.env).toHaveProperty("AGENT_DESK_SESSION_ID");
   });
 
-  it("harnessEnabled=false 워크스페이스의 claude 세션엔 env 가 주입되지 않는다", async () => {
+  it("harnessEnabled=false 워크스페이스의 claude 세션에도 AGENT_DESK_* env 가 주입된다", async () => {
     newSession.mockClear();
     const res = await fetch(`${url}/sessions`, {
       method: "POST",
@@ -172,8 +170,9 @@ describe("sessions 라우트 — harness env 주입", () => {
       body: JSON.stringify({ workspaceId: plainWsId, cli: "claude", args: [] }),
     });
     expect(res.status).toBe(201);
-    const call = newSession.mock.calls.at(-1)![0] as { env?: unknown };
-    expect(call.env).toBeUndefined();
+    const call = newSession.mock.calls.at(-1)![0] as { env?: Record<string, string> };
+    expect(call.env).toHaveProperty("AGENT_DESK_SESSION_ID");
+    expect(call.env).not.toHaveProperty("CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS");
   });
 
   it("harnessEnabled 워크스페이스라도 cli!=claude 면 env 주입 안 함", async () => {

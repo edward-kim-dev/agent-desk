@@ -15,6 +15,8 @@ import {
   ensureAllSkillsInstalled,
   ensureHarnessInstalled,
   ensureHarnessRemoved,
+  ensureProgressHookInstalled,
+  ensureProgressHookRemoved,
 } from "../skills/install";
 
 type WorkspaceRow = typeof workspaces.$inferSelect;
@@ -39,12 +41,20 @@ export function workspaceRoutes(opts: {
   ensureHarnessFn?: typeof ensureHarnessInstalled;
   /** Override harness symlink remover for tests. */
   ensureHarnessRemovedFn?: typeof ensureHarnessRemoved;
+  /** Override progress hook installer for tests. */
+  ensureProgressHookInstalledFn?: typeof ensureProgressHookInstalled;
+  /** Override progress hook remover for tests. */
+  ensureProgressHookRemovedFn?: typeof ensureProgressHookRemoved;
 }): Hono {
   const { db, tmux } = opts;
   const ensureAllSkills = opts.ensureAllSkillsFn ?? ensureAllSkillsInstalled;
   const ensureHarness = opts.ensureHarnessFn ?? ensureHarnessInstalled;
   const ensureHarnessGone =
     opts.ensureHarnessRemovedFn ?? ensureHarnessRemoved;
+  const ensureProgressHook =
+    opts.ensureProgressHookInstalledFn ?? ensureProgressHookInstalled;
+  const ensureProgressHookGone =
+    opts.ensureProgressHookRemovedFn ?? ensureProgressHookRemoved;
   const r = new Hono();
 
   r.get("/", (c) => {
@@ -100,6 +110,11 @@ export function workspaceRoutes(opts: {
       } catch (err) {
         console.warn("[workspaces] harness install failed:", err);
       }
+    }
+    try {
+      await ensureProgressHook(inserted[0].path);
+    } catch (err) {
+      console.warn("[workspaces] progress hook install failed:", err);
     }
     return c.json(toWorkspaceDto(inserted[0]), 201);
   });
@@ -172,6 +187,11 @@ export function workspaceRoutes(opts: {
           at: now,
         })
         .run();
+    }
+    try {
+      await ensureProgressHookGone(ws.path);
+    } catch (err) {
+      console.warn("[workspaces] progress hook remove failed:", err);
     }
     db.update(workspaces).set({ deletedAt: now }).where(eq(workspaces.id, id)).run();
     return c.body(null, 204);

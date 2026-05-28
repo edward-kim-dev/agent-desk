@@ -38,6 +38,8 @@ export function sessionRoutes(opts: {
   db: DbHandle["db"];
   tmux: TmuxClient;
   cli: CliEntry[];
+  gatewayUrl?: string;  // optional until Task 7 wires it
+  token?: string;       // optional until Task 7 wires it
 }): Hono {
   const r = new Hono();
 
@@ -64,18 +66,7 @@ export function sessionRoutes(opts: {
     const tmuxName = generateSessionName(ws.name);
     const command = [cliEntry.command, ...args].map(shellEscape).join(" ");
 
-    const sessionEnv: Record<string, string> = {};
-    if (cliEntry.name === "claude" && ws.harnessEnabled === 1) {
-      sessionEnv.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = "1";
-    }
-
-    await opts.tmux.newSession({
-      name: tmuxName,
-      cwd: ws.path,
-      command,
-      env: Object.keys(sessionEnv).length > 0 ? sessionEnv : undefined,
-    });
-
+    // DB insert first so we have the session ID for env injection
     const now = Date.now();
     const inserted = opts.db
       .insert(sessions)
@@ -91,6 +82,31 @@ export function sessionRoutes(opts: {
       })
       .returning()
       .all();
+
+    // Build env AFTER we have the session ID
+    const sessionEnv: Record<string, string> = {};
+    if (cliEntry.name === "claude") {
+      if (ws.harnessEnabled === 1) {
+        sessionEnv.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = "1";
+      }
+      sessionEnv.AGENT_DESK_SESSION_ID = String(inserted[0].id);
+      sessionEnv.AGENT_DESK_URL        = opts.gatewayUrl ?? "";
+      sessionEnv.AGENT_DESK_TOKEN      = opts.token ?? "";
+    }
+
+    try {
+      await opts.tmux.newSession({
+        name: tmuxName,
+        cwd: ws.path,
+        command,
+        env: Object.keys(sessionEnv).length > 0 ? sessionEnv : undefined,
+      });
+    } catch (err) {
+      // tmux failed — mark session dead so it doesn't ghost
+      opts.db.update(sessions).set({ status: "dead" }).where(eq(sessions.id, inserted[0].id)).run();
+      throw err;
+    }
+
     opts.db
       .insert(sessionEvents)
       .values({

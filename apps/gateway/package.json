@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/main.ts",
     "build": "tsc -b",
+    "postbuild": "node -e \"const{cpSync,mkdirSync}=require('fs');mkdirSync('dist/hooks',{recursive:true});cpSync('src/hooks','dist/hooks',{recursive:true})\"",
     "start": "node dist/main.js",
     "lint": "echo 'no lint yet'",
     "test": "vitest run",

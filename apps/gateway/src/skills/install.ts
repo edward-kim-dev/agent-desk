@@ -266,3 +266,104 @@ export async function ensureHarnessRemoved(
     };
   }
 }
+
+// ---------------------------------------------------------------------------
+// Progress hook install/remove
+// ---------------------------------------------------------------------------
+
+const HOOK_SCRIPT_SRC = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../hooks/wp-progress.js",
+);
+
+type HookEntry = { matcher?: string; hooks?: { type?: string; command?: string }[] };
+
+function isWpHookEntry(h: HookEntry): boolean {
+  return h.hooks?.some((hh) => hh.command?.includes("wp-progress.js")) ?? false;
+}
+
+/**
+ * Copy wp-progress.js into <workspacePath>/.claude/hooks/ and register it in
+ * <workspacePath>/.claude/settings.json (PostToolUse + Stop). Idempotent.
+ */
+export async function ensureProgressHookInstalled(workspacePath: string): Promise<void> {
+  // 1. Ensure hooks dir exists and copy script
+  const hooksDir = path.join(workspacePath, ".claude", "hooks");
+  await fs.mkdir(hooksDir, { recursive: true });
+  await fs.copyFile(HOOK_SCRIPT_SRC, path.join(hooksDir, "wp-progress.js"));
+
+  // 2. Read settings.json (default {} if missing)
+  const settingsPath = path.join(workspacePath, ".claude", "settings.json");
+  let settings: Record<string, unknown> = {};
+  try {
+    const raw = await fs.readFile(settingsPath, "utf8");
+    try {
+      settings = JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      // Malformed JSON — treat as empty (don't corrupt further)
+      settings = {};
+    }
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+  }
+
+  if (typeof settings.hooks !== "object" || settings.hooks === null) {
+    settings.hooks = {};
+  }
+  const hooks = settings.hooks as Record<string, HookEntry[]>;
+
+  // 3. Register in PostToolUse (idempotent)
+  if (!Array.isArray(hooks.PostToolUse)) hooks.PostToolUse = [];
+  if (!hooks.PostToolUse.some(isWpHookEntry)) {
+    hooks.PostToolUse.push({
+      matcher: "Write|Edit",
+      hooks: [{ type: "command", command: "node .claude/hooks/wp-progress.js" }],
+    });
+  }
+
+  // 4. Register in Stop (idempotent)
+  if (!Array.isArray(hooks.Stop)) hooks.Stop = [];
+  if (!hooks.Stop.some(isWpHookEntry)) {
+    hooks.Stop.push({
+      hooks: [{ type: "command", command: "node .claude/hooks/wp-progress.js" }],
+    });
+  }
+
+  // 5. Write back
+  await fs.writeFile(settingsPath, JSON.stringify(settings, null, 2));
+}
+
+/**
+ * Remove wp-progress.js from <workspacePath>/.claude/hooks/ and unregister it
+ * from settings.json. Safe to call when already absent.
+ */
+export async function ensureProgressHookRemoved(workspacePath: string): Promise<void> {
+  // 1. Delete hook script (no-op if missing)
+  const hookFilePath = path.join(workspacePath, ".claude", "hooks", "wp-progress.js");
+  await fs.rm(hookFilePath, { force: true });
+
+  // 2. Read settings.json — return silently if missing
+  const settingsPath = path.join(workspacePath, ".claude", "settings.json");
+  let settings: Record<string, unknown>;
+  try {
+    const raw = await fs.readFile(settingsPath, "utf8");
+    settings = JSON.parse(raw) as Record<string, unknown>;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return;
+    throw err;
+  }
+
+  if (typeof settings.hooks !== "object" || settings.hooks === null) return;
+  const hooks = settings.hooks as Record<string, HookEntry[]>;
+
+  // 3. Filter out wp-progress entries
+  if (Array.isArray(hooks.PostToolUse)) {
+    hooks.PostToolUse = hooks.PostToolUse.filter((h) => !isWpHookEntry(h));
+  }
+  if (Array.isArray(hooks.Stop)) {
+    hooks.Stop = hooks.Stop.filter((h) => !isWpHookEntry(h));
+  }
+
+  // 4. Write back
+  await fs.writeFile(settingsPath, JSON.stringify(settings, null, 2));
+}

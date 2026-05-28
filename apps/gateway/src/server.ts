@@ -9,6 +9,8 @@ import { workspaceRoutes } from "./routes/workspaces";
 import { sessionRoutes } from "./routes/sessions";
 import { wikiRoutes } from "./routes/wiki";
 import { workPackageRoutes } from "./routes/work-packages";
+import { progressRoutes } from "./routes/progress";
+import { progressServer } from "./ws/progress-server";
 import { createTmuxClient, type TmuxClient } from "./tmux/commands";
 import { attachWsServer } from "./ws/attach-server";
 import { startDiscoveryLoop } from "./tmux/discover";
@@ -18,6 +20,8 @@ import {
   ensureAllSkillsInstalled,
   ensureHarnessInstalled,
   ensureHarnessRemoved,
+  ensureProgressHookInstalled,
+  ensureProgressHookRemoved,
   type ensureSkillInstalled,
 } from "./skills/install";
 import { isNull } from "drizzle-orm";
@@ -41,6 +45,10 @@ export interface CreateServerOptions {
   ensureHarnessFn?: typeof ensureHarnessInstalled;
   /** Override harness symlink remover. Tests use this to bypass filesystem. */
   ensureHarnessRemovedFn?: typeof ensureHarnessRemoved;
+  /** Override progress hook installer. Tests use this to bypass filesystem. */
+  ensureProgressHookInstalledFn?: typeof ensureProgressHookInstalled;
+  /** Override progress hook remover. Tests use this to bypass filesystem. */
+  ensureProgressHookRemovedFn?: typeof ensureProgressHookRemoved;
   /** Skip the boot-time bulk skill install. Defaults to running. */
   installSkillsOnStartup?: boolean;
 }
@@ -72,12 +80,15 @@ export async function createServer(
       ensureAllSkillsFn: ensureAllSkills,
       ensureHarnessFn: opts.ensureHarnessFn,
       ensureHarnessRemovedFn: opts.ensureHarnessRemovedFn,
+      ensureProgressHookInstalledFn: opts.ensureProgressHookInstalledFn,
+      ensureProgressHookRemovedFn: opts.ensureProgressHookRemovedFn,
     }),
   );
   // 활성 워크스페이스에 vendored 스킬을 일괄 symlink (idempotent).
   // 기동을 지연시키지 않도록 background 로 디스패치.
   if (opts.installSkillsOnStartup !== false) {
     const ensureHarness = opts.ensureHarnessFn ?? ensureHarnessInstalled;
+    const ensureProgressHook = opts.ensureProgressHookInstalledFn ?? ensureProgressHookInstalled;
     void (async () => {
       const rows = opts.db.db
         .select({
@@ -93,6 +104,11 @@ export async function createServer(
         } catch (err) {
           console.warn("[startup] skill install failed for", ws.path, err);
         }
+        try {
+          await ensureProgressHook(ws.path);
+        } catch (err) {
+          console.warn("[startup] progress hook install failed for", ws.path, err);
+        }
         if (ws.harnessEnabled === 1) {
           try {
             await ensureHarness({ workspacePath: ws.path });
@@ -104,12 +120,19 @@ export async function createServer(
     })();
   }
   api.route("/workspaces", wikiRoutes(opts.db.db));
+  const sessionOpts = {
+    db: opts.db.db,
+    tmux,
+    cli: opts.cli,
+    gatewayUrl: "",      // patched after bind
+    token: opts.token,
+  };
+  api.route("/sessions", sessionRoutes(sessionOpts));
   api.route(
     "/sessions",
-    sessionRoutes({
+    progressRoutes({
       db: opts.db.db,
-      tmux,
-      cli: opts.cli,
+      broadcast: progressServer.broadcastStepReady.bind(progressServer),
     }),
   );
 
@@ -137,6 +160,7 @@ export async function createServer(
     db: opts.db.db,
     token: opts.token,
   });
+  progressServer.attachToHttpServer(server as unknown as Server, opts.token);
 
   const disposers: Array<() => void> = [];
   if (opts.startBackgroundJobs) {
@@ -146,11 +170,13 @@ export async function createServer(
   }
 
   const addr = server.address() as AddressInfo;
+  sessionOpts.gatewayUrl = `http://${opts.bind}:${addr.port}`;
   return {
     url: `http://${opts.bind}:${addr.port}`,
     port: addr.port,
     close: async () => {
       for (const d of disposers) d();
+      progressServer.close();
       await wsHandle.close();
       await new Promise<void>((res, rej) =>
         server.close((err) => (err ? rej(err) : res()))
