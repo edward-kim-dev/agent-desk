@@ -83,8 +83,12 @@ export function progressRoutes(opts: {
 
     if ("filePath" in data) {
       // completionArtifactDir prefix matching
+      // Claude Code sends relative paths (e.g. "docs/foo/bar.md") — resolve against
+      // workspace path so we can compare with the absolute absDir.
       const absDir = path.join(ws.path, step.completionArtifactDir);
-      const absFile = path.normalize(data.filePath);
+      const absFile = path.isAbsolute(data.filePath)
+        ? path.normalize(data.filePath)
+        : path.normalize(path.join(ws.path, data.filePath));
       markerMatched = absFile.startsWith(path.normalize(absDir));
 
       opts.db

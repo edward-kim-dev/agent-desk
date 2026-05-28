@@ -134,6 +134,18 @@ describe("POST /sessions/:id/progress — filePath", () => {
     expect(broadcast).toHaveBeenCalledOnce();
   });
 
+  it("상대 경로로 specs/ 안 파일 → stepReady:true (Claude Code는 상대 경로로 보냄)", async () => {
+    const relPath = "docs/superpowers/specs/2026-05-28-relative.md";
+    writeFileSync(join(fsRoot, relPath), "# test relative");
+
+    const res = await post(`/sessions/${sessionId}/progress`, { filePath: relPath });
+    expect(res.status).toBe(200);
+    const body = await res.json() as Record<string, unknown>;
+    expect(body.recorded).toBe(true);
+    expect(body.stepReady).toBe(true);
+    expect(broadcast).toHaveBeenCalledOnce();
+  });
+
   it("plans/ 파일은 step 1에서 stepReady:false (wrong dir)", async () => {
     const filePath = `${fsRoot}/docs/superpowers/plans/2026-05-28-foo.md`;
     writeFileSync(filePath, "# test");
