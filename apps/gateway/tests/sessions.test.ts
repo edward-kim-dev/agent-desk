@@ -49,6 +49,7 @@ beforeAll(async () => {
       hasSession: async () => true,
       sendKeys: async () => {},
       capturePane: async () => "",
+      capturePaneHistory: async () => "",
       paneCurrentCommand: async () => "claude",
       paneChildren: async () => [],
     },

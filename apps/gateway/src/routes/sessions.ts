@@ -119,6 +119,23 @@ export function sessionRoutes(opts: {
     return c.json(toDto(inserted[0]), 201);
   });
 
+  r.get("/:id/history", async (c) => {
+    const id = Number(c.req.param("id"));
+    if (!Number.isInteger(id)) return c.json({ error: "bad_id" }, 400);
+    const linesParam = Number(c.req.query("lines") ?? "500");
+    const lines = Math.min(Math.max(Number.isFinite(linesParam) ? linesParam : 500, 50), 2000);
+
+    const s = opts.db.select().from(sessions).where(eq(sessions.id, id)).get();
+    if (!s) return c.json({ error: "not_found" }, 404);
+
+    try {
+      const history = await opts.tmux.capturePaneHistory(s.tmuxName, lines);
+      return c.json({ history });
+    } catch {
+      return c.json({ error: "capture_failed" }, 500);
+    }
+  });
+
   r.delete("/:id", async (c) => {
     const id = Number(c.req.param("id"));
     if (!Number.isInteger(id)) return c.json({ error: "bad_id" }, 400);

@@ -60,6 +60,9 @@ export interface TmuxClient {
   hasSession(name: string): Promise<boolean>;
   sendKeys(name: string, text: string, withEnter: boolean): Promise<void>;
   capturePane(name: string): Promise<string>;
+  /** Capture pane content including scrollback history. `-e` preserves ANSI codes.
+   *  `lines` controls how many lines back to include (capped to tmux history-limit). */
+  capturePaneHistory(name: string, lines: number): Promise<string>;
   paneCurrentCommand(name: string): Promise<string | null>;
   /** Immediate children (comm names) of the pane's leading process. */
   paneChildren(name: string): Promise<string[]>;
@@ -154,6 +157,15 @@ export function createTmuxClient(opts: { exec?: ExecLike } = {}): TmuxClient {
     return stdout;
   }
 
+  async function capturePaneHistory(name: string, lines: number): Promise<string> {
+    // -e  : preserve ANSI escape sequences (colours)
+    // -S  : start line (negative = lines from current position upwards)
+    const { stdout } = await exec("tmux", [
+      "capture-pane", "-p", "-e", "-S", String(-Math.abs(lines)), "-t", name,
+    ]);
+    return stdout;
+  }
+
   async function paneCurrentCommand(name: string): Promise<string | null> {
     try {
       const { stdout } = await exec("tmux", [
@@ -200,6 +212,7 @@ export function createTmuxClient(opts: { exec?: ExecLike } = {}): TmuxClient {
     hasSession,
     sendKeys,
     capturePane,
+    capturePaneHistory,
     paneCurrentCommand,
     paneChildren,
   };

@@ -161,6 +161,14 @@ describe("tmuxClient", () => {
     expect(await client.capturePane("ad-foo")).toBe("line1\nline2\n");
   });
 
+  it("capturePaneHistory 는 -e -S -N 플래그로 히스토리 포함 덤프를 반환", async () => {
+    const exec = mockExec({
+      "tmux capture-pane -p -e -S -500 -t ad-foo": { stdout: "\x1b[32mhello\x1b[0m\nworld\n" },
+    });
+    const client = createTmuxClient({ exec });
+    expect(await client.capturePaneHistory("ad-foo", 500)).toBe("\x1b[32mhello\x1b[0m\nworld\n");
+  });
+
   it("paneChildren 은 pane_pid 의 직접 자식 comm 목록을 반환", async () => {
     const calls: { cmd: string; args: string[] }[] = [];
     const exec: ExecLike = vi.fn(async (cmd: string, args: string[]) => {

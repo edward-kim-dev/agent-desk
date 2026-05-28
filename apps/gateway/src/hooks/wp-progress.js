@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // wp-progress.js — agent-desk work-package 진행 추적
 // Claude Code PostToolUse(Write|Edit) 및 Stop 훅에서 호출
-// Node.js CJS — Windows/Mac/Linux 공통. 항상 exit(0).
+// Node.js CJS — Windows/Mac/Linux 공통. HTTP 요청 완료 후 자연 종료.
 //
 // TODO(v2-codex): Codex PostToolUse는 apply_patch 도구 사용.
 //   file_path가 unified diff에 임베드 → grep '+++ b/' | sed 파싱 필요.
@@ -27,7 +27,8 @@ process.stdin.setEncoding("utf8");
 process.stdin.on("data", (c) => { raw += c; });
 process.stdin.on("end", () => {
   try { run(JSON.parse(raw)); } catch { /* 파싱 실패 무시 */ }
-  process.exit(0);
+  // process.exit() 호출 금지 — HTTP 요청이 전송되기 전에 프로세스를 죽임.
+  // 이벤트 루프에 대기 중인 I/O(HTTP req)가 없으면 Node.js 가 알아서 종료.
 });
 
 function run(input) {
