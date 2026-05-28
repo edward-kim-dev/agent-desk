@@ -13,6 +13,8 @@ import { NewSessionDialog } from "../new-session-dialog";
 import { TerminalPanel } from "../terminal-panel";
 import { WorkPackageModal } from "../work-package-modal";
 import { ActivePackageCard } from "../active-package-card";
+import { useProgressSocket, type StepReadyEvent } from "@/hooks/use-progress-socket";
+import { StepReadyOverlay } from "../step-ready-overlay";
 
 const POLL_INTERVAL_MS = 3000;
 
@@ -34,6 +36,10 @@ export function TerminalTab(props: {
   const [wpBusy, setWpBusy] = useState(false);
   /** modal 을 한 번이라도 사용자가 dismiss 한 세션 — 같은 탭에서 다시 자동으로 안 뜸. */
   const dismissedRef = useRef<Set<number>>(new Set());
+
+  const [stepReadyEvent, setStepReadyEvent] = useState<StepReadyEvent | null>(null);
+  /** 이미 dismiss한 stepIndex — 같은 step에서 오버레이 재표시 방지 */
+  const dismissedStepRef = useRef<number | null>(null);
 
   const stoppedRef = useRef(false);
   const inFlightRef = useRef<AbortController | null>(null);
@@ -245,6 +251,20 @@ export function TerminalTab(props: {
     }
   }, [activeWp, refreshArtifacts]);
 
+  useProgressSocket({
+    sessionId: selectedSessionId,
+    onStepReady: (event) => {
+      // 이미 dismiss한 step이면 무시
+      if (dismissedStepRef.current === event.stepIndex) return;
+      setStepReadyEvent(event);
+    },
+  });
+
+  // activeWp 가 변했을 때 (step advanced) → dismissed ref 를 리셋
+  useEffect(() => {
+    dismissedStepRef.current = null;
+  }, [activeWp?.currentStep]);
+
   const selectedSession = sessions.find((s) => s.id === selectedSessionId);
   const activePackageDef = activeWp
     ? packages.find((p) => p.id === activeWp.packageId)
@@ -257,6 +277,27 @@ export function TerminalTab(props: {
       <section className="absolute inset-0">
         <TerminalPanel sessionId={selectedSessionId} />
       </section>
+
+      {stepReadyEvent && activeWp && (
+        <StepReadyOverlay
+          stepTitle={stepReadyEvent.stepTitle}
+          nextStepTitle={
+            activePackageDef?.stepTitles[stepReadyEvent.stepIndex] ?? null
+          }
+          isLastStep={
+            stepReadyEvent.stepIndex >= (activePackageDef?.stepTitles.length ?? 1)
+          }
+          onAdvance={async () => {
+            const event = stepReadyEvent;
+            setStepReadyEvent(null);
+            await handleAdvance(event.stepIndex);
+          }}
+          onDismiss={() => {
+            dismissedStepRef.current = stepReadyEvent.stepIndex;
+            setStepReadyEvent(null);
+          }}
+        />
+      )}
 
       <aside
         aria-label="Sessions"
