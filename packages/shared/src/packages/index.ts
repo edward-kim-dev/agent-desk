@@ -25,7 +25,8 @@ export interface PackageCatalogEntry {
   title: string;
   description: string;
   cliRequirement: "claude" | "any";
-  fields: PackageDefinition["startForm"]["fields"];
+  /** step 별 폼 필드. schema/promptTemplate 는 직렬화 불가하므로 제외. */
+  forms: { step: number; fields: PackageDefinition["forms"][number]["fields"] }[];
   stepTitles: string[];
 }
 
@@ -35,7 +36,7 @@ export function toCatalogEntry(def: PackageDefinition): PackageCatalogEntry {
     title: def.title,
     description: def.description,
     cliRequirement: def.cliRequirement,
-    fields: def.startForm.fields,
+    forms: def.forms.map((f) => ({ step: f.step, fields: f.fields })),
     stepTitles: def.steps.map((s) => s.title),
   };
 }

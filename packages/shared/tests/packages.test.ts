@@ -8,7 +8,11 @@ import {
   planning,
   startWorkPackageRequest,
   toCatalogEntry,
+  type AnyPackageDefinition,
 } from "../src";
+
+const startSchema = (def: AnyPackageDefinition) =>
+  def.forms.find((f) => f.step === 1)!.schema;
 
 describe("packages registry", () => {
   it("planning 패키지가 PACKAGES 에 등록되어 있다", () => {
@@ -26,30 +30,38 @@ describe("packages registry", () => {
     ]);
   });
 
-  it("startForm.schema 가 topic 누락을 거부한다", () => {
-    const r = planning.startForm.schema.safeParse({ context: "x" });
+  it("step1 폼 schema 가 topic 누락을 거부한다", () => {
+    const r = startSchema(planning).safeParse({ context: "x" });
     expect(r.success).toBe(false);
   });
 
-  it("startForm.schema 가 topic 만 있어도 통과한다", () => {
-    const r = planning.startForm.schema.safeParse({ topic: "test" });
+  it("step1 폼 schema 가 topic 만 있어도 통과한다", () => {
+    const r = startSchema(planning).safeParse({ topic: "test" });
     expect(r.success).toBe(true);
   });
 
   it("Step 1 promptTemplate 가 /brainstorming 프롬프트를 만든다", () => {
     const out = planning.steps[0].promptTemplate(
-      { topic: "X", context: "Y" },
+      { 1: { topic: "X", context: "Y" } },
       { workspacePath: "/tmp", packageInstanceId: -1 },
     );
     expect(out).toBe("/brainstorming Topic: X · Context: Y");
   });
 
-  it("Step 2 promptTemplate 가 /writing-plans 만 반환한다", () => {
+  it("Step 2 promptTemplate 가 guidance 없으면 /writing-plans 만 반환한다", () => {
     const out = planning.steps[1].promptTemplate(
-      { topic: "X" },
+      { 1: { topic: "X" } },
       { workspacePath: "/tmp", packageInstanceId: 7 },
     );
     expect(out).toBe("/writing-plans");
+  });
+
+  it("Step 2 promptTemplate 가 guidance 있으면 뒤에 붙인다", () => {
+    const out = planning.steps[1].promptTemplate(
+      { 1: { topic: "X" }, 2: { guidance: "be terse\nuse bullets" } },
+      { workspacePath: "/tmp", packageInstanceId: 7 },
+    );
+    expect(out).toBe("/writing-plans be terse · use bullets");
   });
 
   it("formatBrainstormingPrompt 가 줄바꿈을 · 로 치환한다", () => {
@@ -60,11 +72,19 @@ describe("packages registry", () => {
     expect(out).toContain("line1 · line2");
   });
 
-  it("toCatalogEntry 가 schema 를 제거하고 stepTitles 를 펼친다", () => {
+  it("toCatalogEntry 가 schema 를 제거하고 forms·stepTitles 를 펼친다", () => {
     const entry = toCatalogEntry(planning);
     expect(entry.id).toBe("planning");
     expect(entry.stepTitles).toEqual(["Brainstorm", "Write plan"]);
-    expect("schema" in (entry as Record<string, unknown>)).toBe(false);
+    expect(entry.forms.map((f) => f.step)).toEqual([1, 2]);
+    expect(entry.forms[0].fields[0].name).toBe("topic");
+    const serializedForms = (
+      JSON.parse(JSON.stringify(entry)) as {
+        forms: Array<Record<string, unknown>>;
+      }
+    ).forms;
+    expect(serializedForms).toHaveLength(2);
+    expect(serializedForms.every((f) => !("schema" in f))).toBe(true);
   });
 
   it("startWorkPackageRequest 가 packageId 누락을 거부한다", () => {
@@ -81,7 +101,7 @@ describe("develop package", () => {
   });
 
   it("planPath 필드가 plans 를 source 로 하는 select 이다", () => {
-    const field = develop.startForm.fields[0];
+    const field = develop.forms.find((f) => f.step === 1)!.fields[0];
     expect(field.kind).toBe("select");
     expect(field.optionsSource).toBe("plans");
     expect(field.required).toBe(true);
@@ -89,26 +109,22 @@ describe("develop package", () => {
 
   it("promptTemplate 가 /executing-plans <planPath> 를 만든다", () => {
     const out = develop.steps[0].promptTemplate(
-      { planPath: "docs/superpowers/plans/2026-05-27-foo.md" },
+      { 1: { planPath: "docs/superpowers/plans/2026-05-27-foo.md" } },
       { workspacePath: "/tmp", packageInstanceId: 1 },
     );
     expect(out).toBe("/executing-plans docs/superpowers/plans/2026-05-27-foo.md");
   });
 
   it("schema 가 plans 디렉토리 밖 경로를 거부한다", () => {
+    const schema = startSchema(develop);
+    expect(schema.safeParse({ planPath: "../../etc/passwd" }).success).toBe(
+      false,
+    );
     expect(
-      develop.startForm.schema.safeParse({ planPath: "../../etc/passwd" })
-        .success,
+      schema.safeParse({ planPath: "docs/superpowers/specs/x.md" }).success,
     ).toBe(false);
     expect(
-      develop.startForm.schema.safeParse({
-        planPath: "docs/superpowers/specs/x.md",
-      }).success,
-    ).toBe(false);
-    expect(
-      develop.startForm.schema.safeParse({
-        planPath: "docs/superpowers/plans/x.md",
-      }).success,
+      schema.safeParse({ planPath: "docs/superpowers/plans/x.md" }).success,
     ).toBe(true);
   });
 });
@@ -123,7 +139,7 @@ describe("freeform package", () => {
 
   it("promptTemplate 가 prompt 를 그대로 (줄바꿈만 치환) 반환한다", () => {
     const out = freeform.steps[0].promptTemplate(
-      { prompt: "line1\nline2" },
+      { 1: { prompt: "line1\nline2" } },
       { workspacePath: "/tmp", packageInstanceId: 1 },
     );
     expect(out).toBe("line1 · line2");
@@ -149,5 +165,26 @@ describe("planning package completionArtifactDir", () => {
   it("step 2 completionArtifactDir는 docs/superpowers/plans/ 이다", () => {
     const step2 = planning.steps.find((s) => s.index === 2);
     expect(step2?.completionArtifactDir).toBe("docs/superpowers/plans/");
+  });
+});
+
+describe("planning mid-run form (step 2)", () => {
+  it("step 2 에 옵셔널 guidance 폼이 선언돼 있다", () => {
+    const form = planning.forms.find((f) => f.step === 2);
+    expect(form).toBeTruthy();
+    expect(form!.fields[0].name).toBe("guidance");
+    expect(form!.fields[0].required).toBeUndefined();
+  });
+
+  it("step 2 폼 schema 가 빈 객체를 통과시킨다(옵셔널)", () => {
+    const form = planning.forms.find((f) => f.step === 2)!;
+    expect(form.schema.safeParse({}).success).toBe(true);
+  });
+
+  it("step 2 폼 schema 가 너무 긴 guidance 를 거부한다", () => {
+    const form = planning.forms.find((f) => f.step === 2)!;
+    expect(
+      form.schema.safeParse({ guidance: "x".repeat(2001) }).success,
+    ).toBe(false);
   });
 });

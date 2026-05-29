@@ -9,7 +9,7 @@ export const workPackageDto = z.object({
   packageId: z.string(),
   currentStep: z.number().int().nonnegative(),
   status: workPackageStatus,
-  inputs: z.record(z.string(), z.unknown()),
+  inputs: z.record(z.string(), z.record(z.string(), z.unknown())),
   createdAt: z.number().int(),
   advancedAt: z.number().int(),
   completedAt: z.number().int().nullable(),
@@ -37,6 +37,7 @@ export type StartWorkPackageRequest = z.infer<typeof startWorkPackageRequest>;
 
 export const advanceWorkPackageRequest = z.object({
   expectedCurrentStep: z.number().int().positive(),
+  inputs: z.record(z.string(), z.unknown()).optional(),
 });
 export type AdvanceWorkPackageRequest = z.infer<typeof advanceWorkPackageRequest>;
 

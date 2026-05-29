@@ -17,7 +17,9 @@ export interface FieldSpec {
   optionsSource?: "plans";
 }
 
-export interface StartForm<S extends z.ZodTypeAny = z.ZodTypeAny> {
+export interface FormSpec<S extends z.ZodTypeAny = z.ZodTypeAny> {
+  /** 이 step 의 프롬프트 주입 직전에 수집한다 (1-based). step:1 = 시작 폼. */
+  step: number;
   schema: S;
   fields: FieldSpec[];
 }
@@ -45,6 +47,7 @@ export interface PackageDefinition<I = unknown> {
   title: string;
   description: string;
   cliRequirement: "claude" | "any";
-  startForm: StartForm;
+  /** step 당 0~1개. step:1 폼이 시작 폼. */
+  forms: FormSpec[];
   steps: StepDefinition<I>[];
 }

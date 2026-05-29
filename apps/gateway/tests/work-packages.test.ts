@@ -137,7 +137,10 @@ describe("GET /packages", () => {
       packages: Array<{
         id: string;
         stepTitles: string[];
-        fields: Array<{ name: string; kind: string; optionsSource?: string }>;
+        forms: Array<{
+          step: number;
+          fields: Array<{ name: string; kind: string; optionsSource?: string }>;
+        }>;
       }>;
     };
     expect(body.packages.map((p) => p.id)).toEqual([
@@ -147,9 +150,11 @@ describe("GET /packages", () => {
     ]);
     const planning = body.packages.find((p) => p.id === "planning")!;
     expect(planning.stepTitles).toEqual(["Brainstorm", "Write plan"]);
+    expect(planning.forms.map((f) => f.step)).toEqual([1, 2]);
     // develop 의 plan select 필드가 optionsSource 와 함께 직렬화된다
     const develop = body.packages.find((p) => p.id === "develop")!;
-    expect(develop.fields[0]).toMatchObject({
+    const developStart = develop.forms.find((f) => f.step === 1)!;
+    expect(developStart.fields[0]).toMatchObject({
       name: "planPath",
       kind: "select",
       optionsSource: "plans",
@@ -366,6 +371,145 @@ describe("POST /work-packages/:id/advance", () => {
     });
     expect(res.status).toBe(409);
     expect((await res.json()).error).toBe("no_next_step");
+  });
+});
+
+describe("POST /work-packages/:id/advance — mid-run form", () => {
+  let advSessionId: number;
+  let wpId: number;
+
+  beforeAll(async () => {
+    // 기존 활성 인스턴스 정리
+    const active = handle.db
+      .select()
+      .from(workPackages)
+      .where(eq(workPackages.status, "active"))
+      .get();
+    if (active) {
+      await fetch(`${url}/work-packages/${active.id}/complete`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ outcome: "abandoned" }),
+      });
+    }
+    const s = handle.db
+      .insert(sessions)
+      .values({
+        tmuxName: "ad-wp-adv-form",
+        workspaceId,
+        cli: "claude",
+        args: "",
+        status: "active",
+        lastActivityAt: Date.now(),
+        createdAt: Date.now(),
+        adopted: 0,
+      })
+      .returning()
+      .all();
+    advSessionId = s[0].id;
+    const startRes = await fetch(
+      `${url}/sessions/${advSessionId}/work-packages`,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          packageId: "planning",
+          inputs: { topic: "FORM" },
+        }),
+      },
+    );
+    wpId = ((await startRes.json()) as { instance: { id: number } }).instance.id;
+  });
+
+  it("start 가 inputsJson 을 { \"1\": ... } 네임스페이스로 저장한다", () => {
+    const row = handle.db
+      .select()
+      .from(workPackages)
+      .where(eq(workPackages.id, wpId))
+      .get();
+    const stored = JSON.parse(row!.inputsJson) as Record<
+      string,
+      Record<string, unknown>
+    >;
+    expect(stored["1"]).toMatchObject({ topic: "FORM" });
+    expect(stored["2"]).toBeUndefined();
+  });
+
+  it("advance + guidance → prompt 에 반영 + inputsJson[\"2\"] 누적", async () => {
+    injectFn.mockClear();
+    const res = await fetch(`${url}/work-packages/${wpId}/advance`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        expectedCurrentStep: 1,
+        inputs: { guidance: "be terse" },
+      }),
+    });
+    expect(res.status).toBe(200);
+    const firstCall = injectFn.mock.calls[0][0] as { prompt: string };
+    expect(firstCall.prompt).toBe("/writing-plans be terse");
+
+    const row = handle.db
+      .select()
+      .from(workPackages)
+      .where(eq(workPackages.id, wpId))
+      .get();
+    const stored = JSON.parse(row!.inputsJson) as Record<
+      string,
+      Record<string, unknown>
+    >;
+    expect(stored["1"]).toMatchObject({ topic: "FORM" });
+    expect(stored["2"]).toMatchObject({ guidance: "be terse" });
+  });
+
+  it("폼 schema 위반(과길이 guidance) → 400 invalid_inputs", async () => {
+    // 새 인스턴스로 step 1 에서 검증
+    const active = handle.db
+      .select()
+      .from(workPackages)
+      .where(eq(workPackages.status, "active"))
+      .get();
+    if (active) {
+      await fetch(`${url}/work-packages/${active.id}/complete`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ outcome: "abandoned" }),
+      });
+    }
+    const s = handle.db
+      .insert(sessions)
+      .values({
+        tmuxName: "ad-wp-adv-form-bad",
+        workspaceId,
+        cli: "claude",
+        args: "",
+        status: "active",
+        lastActivityAt: Date.now(),
+        createdAt: Date.now(),
+        adopted: 0,
+      })
+      .returning()
+      .all();
+    const startRes = await fetch(
+      `${url}/sessions/${s[0].id}/work-packages`,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ packageId: "planning", inputs: { topic: "B" } }),
+      },
+    );
+    const badWpId = ((await startRes.json()) as { instance: { id: number } })
+      .instance.id;
+    const res = await fetch(`${url}/work-packages/${badWpId}/advance`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        expectedCurrentStep: 1,
+        inputs: { guidance: "x".repeat(2001) },
+      }),
+    });
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe("invalid_inputs");
   });
 });
 

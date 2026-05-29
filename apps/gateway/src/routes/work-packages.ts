@@ -38,7 +38,7 @@ function rowToDto(r: WorkPackageRow): WorkPackageDto {
     packageId: r.packageId,
     currentStep: r.currentStep,
     status: r.status as WorkPackageDto["status"],
-    inputs: JSON.parse(r.inputsJson) as Record<string, unknown>,
+    inputs: JSON.parse(r.inputsJson) as Record<string, Record<string, unknown>>,
     createdAt: r.createdAt,
     advancedAt: r.advancedAt,
     completedAt: r.completedAt,
@@ -160,9 +160,14 @@ export function workPackageRoutes(opts: WorkPackageRouteOptions): {
     if (existing)
       return c.json({ error: "already_has_active_package" }, 409);
 
-    const inputsParsed = def.startForm.schema.safeParse(parsed.data.inputs);
-    if (!inputsParsed.success)
-      return c.json({ error: "invalid_inputs" }, 400);
+    const startForm = def.forms.find((f) => f.step === 1);
+    let initialInputs: Record<string, Record<string, unknown>> = {};
+    if (startForm) {
+      const inputsParsed = startForm.schema.safeParse(parsed.data.inputs);
+      if (!inputsParsed.success)
+        return c.json({ error: "invalid_inputs" }, 400);
+      initialInputs = { 1: inputsParsed.data as Record<string, unknown> };
+    }
 
     const ws = opts.db
       .select()
@@ -195,7 +200,7 @@ export function workPackageRoutes(opts: WorkPackageRouteOptions): {
       workspacePath: ws.path,
       packageInstanceId: -1,
     };
-    const prompt = def.steps[0].promptTemplate(inputsParsed.data, ctx);
+    const prompt = def.steps[0].promptTemplate(initialInputs, ctx);
 
     let injectResult: InjectResult;
     try {
@@ -230,7 +235,7 @@ export function workPackageRoutes(opts: WorkPackageRouteOptions): {
         packageId: def.id,
         currentStep: 1,
         status: "active",
-        inputsJson: JSON.stringify(inputsParsed.data),
+        inputsJson: JSON.stringify(initialInputs),
         baselineJson: JSON.stringify(baseline),
         createdAt: t,
         advancedAt: t,
@@ -324,6 +329,23 @@ export function workPackageRoutes(opts: WorkPackageRouteOptions): {
     const nextStep = def.steps[row.currentStep];
     if (!nextStep) return c.json({ error: "no_next_step" }, 409);
 
+    // 폼 검증은 어떤 side effect(reconcile/skill install/inject)보다 먼저 한다.
+    const existingInputs = JSON.parse(row.inputsJson) as Record<
+      string,
+      Record<string, unknown>
+    >;
+    const nextForm = def.forms.find((f) => f.step === nextStep.index);
+    let mergedInputs = existingInputs;
+    if (nextForm) {
+      const formParsed = nextForm.schema.safeParse(parsed.data.inputs ?? {});
+      if (!formParsed.success)
+        return c.json({ error: "invalid_inputs" }, 400);
+      mergedInputs = {
+        ...existingInputs,
+        [nextStep.index]: formParsed.data as Record<string, unknown>,
+      };
+    }
+
     const sessionRow = opts.db
       .select()
       .from(sessions)
@@ -368,12 +390,11 @@ export function workPackageRoutes(opts: WorkPackageRouteOptions): {
       }
     }
 
-    const inputs = JSON.parse(row.inputsJson) as Record<string, unknown>;
     const ctx: StepContext = {
       workspacePath: ws.path,
       packageInstanceId: row.id,
     };
-    const prompt = nextStep.promptTemplate(inputs, ctx);
+    const prompt = nextStep.promptTemplate(mergedInputs, ctx);
 
     let injectResult: InjectResult;
     try {
@@ -420,6 +441,7 @@ export function workPackageRoutes(opts: WorkPackageRouteOptions): {
         currentStep: nextStep.index,
         advancedAt: t,
         baselineJson: JSON.stringify(recon.newBaseline),
+        inputsJson: JSON.stringify(mergedInputs),
       })
       .where(eq(workPackages.id, row.id))
       .run();
