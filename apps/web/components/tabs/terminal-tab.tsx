@@ -15,6 +15,8 @@ import { WorkPackageModal } from "../work-package-modal";
 import { ActivePackageCard } from "../active-package-card";
 import { useProgressSocket, type StepReadyEvent } from "@/hooks/use-progress-socket";
 import { StepReadyOverlay } from "../step-ready-overlay";
+import { AdvanceFormOverlay } from "../advance-form-overlay";
+import type { FieldSpec } from "@agent-desk/shared";
 
 const POLL_INTERVAL_MS = 3000;
 
@@ -29,6 +31,15 @@ export function TerminalTab(props: {
   );
 
   const [packages, setPackages] = useState<PackageCatalogEntry[]>([]);
+  const [advanceForm, setAdvanceForm] = useState<{
+    expectedCurrentStep: number;
+    nextStepTitle: string;
+    fields: FieldSpec[];
+  } | null>(null);
+  const [advanceOptions, setAdvanceOptions] = useState<
+    Record<string, string[]>
+  >({});
+  const [advanceOptionsLoading, setAdvanceOptionsLoading] = useState(false);
   const [activeWp, setActiveWp] = useState<WorkPackageDto | null>(null);
   const [artifacts, setArtifacts] = useState<WorkPackageArtifactDto[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
@@ -41,6 +52,8 @@ export function TerminalTab(props: {
   const [stepReadyEvent, setStepReadyEvent] = useState<StepReadyEvent | null>(null);
   /** 이미 dismiss한 stepIndex — 같은 step에서 오버레이 재표시 방지 */
   const dismissedStepRef = useRef<number | null>(null);
+  /** advance 폼 옵션 로딩 중 사용자가 취소하면 in-flight 결과로 오버레이가 다시 뜨지 않게 막는다. */
+  const advanceCancelledRef = useRef(false);
 
   const stoppedRef = useRef(false);
   const inFlightRef = useRef<AbortController | null>(null);
@@ -220,23 +233,75 @@ export function TerminalTab(props: {
     setModalBusy(false);
   }, [selectedSessionId]);
 
+  const activePackageDef = activeWp
+    ? packages.find((p) => p.id === activeWp.packageId)
+    : null;
+
   const handleAdvance = useCallback(
-    async (expectedCurrentStep: number) => {
+    async (
+      expectedCurrentStep: number,
+      inputs?: Record<string, unknown>,
+    ) => {
       if (activeWp == null) return;
       setWpBusy(true);
       try {
         const res = await gateway.workPackages.advance(activeWp.id, {
           expectedCurrentStep,
+          ...(inputs ? { inputs } : {}),
         });
         setActiveWp(res.instance);
         await refreshArtifacts(activeWp.id);
       } catch {
-        // 사용자에게 토스트 등이 필요하지만 V1 에선 silent — UI 상태 stale 만
+        // V1: silent (UI stale 만)
       } finally {
         setWpBusy(false);
       }
     },
     [activeWp, refreshArtifacts],
+  );
+
+  const requestAdvance = useCallback(
+    async (expectedCurrentStep: number) => {
+      const nextStepIndex = expectedCurrentStep + 1;
+      const form = activePackageDef?.forms.find(
+        (f) => f.step === nextStepIndex,
+      );
+      if (!form) {
+        await handleAdvance(expectedCurrentStep);
+        return;
+      }
+      // 폼이 있으면 동적 옵션 로드 후 오버레이 표시
+      advanceCancelledRef.current = false;
+      setAdvanceOptions({});
+      setAdvanceOptionsLoading(false);
+      const dynamic = form.fields.filter((f) => f.optionsSource);
+      if (dynamic.length > 0) {
+        setAdvanceOptionsLoading(true);
+        const acc: Record<string, string[]> = {};
+        for (const f of dynamic) {
+          try {
+            acc[f.name] = await loadOptions(f.optionsSource!);
+          } catch {
+            acc[f.name] = [];
+          }
+        }
+        // 로딩 중 취소되면 오버레이를 열지 않는다.
+        if (advanceCancelledRef.current) {
+          setAdvanceOptionsLoading(false);
+          return;
+        }
+        setAdvanceOptions(acc);
+        setAdvanceOptionsLoading(false);
+      }
+      if (advanceCancelledRef.current) return;
+      setAdvanceForm({
+        expectedCurrentStep,
+        nextStepTitle:
+          activePackageDef?.stepTitles[nextStepIndex - 1] ?? "",
+        fields: form.fields,
+      });
+    },
+    [activePackageDef, handleAdvance, loadOptions],
   );
 
   const handleComplete = useCallback(async () => {
@@ -275,15 +340,15 @@ export function TerminalTab(props: {
     },
   });
 
-  // activeWp 가 변했을 때 (step advanced) → dismissed ref 를 리셋
+  // activeWp 가 변했을 때 (step advanced / 다른 WP) → dismissed ref 리셋 +
+  // in-flight advance 폼 로딩 취소 및 stale 오버레이 닫기
   useEffect(() => {
     dismissedStepRef.current = null;
-  }, [activeWp?.currentStep]);
+    advanceCancelledRef.current = true;
+    setAdvanceForm(null);
+  }, [activeWp?.id, activeWp?.currentStep]);
 
   const selectedSession = sessions.find((s) => s.id === selectedSessionId);
-  const activePackageDef = activeWp
-    ? packages.find((p) => p.id === activeWp.packageId)
-    : null;
 
   const sessionsOpen = props.sessionsOpen;
 
@@ -305,12 +370,28 @@ export function TerminalTab(props: {
           onAdvance={async () => {
             const event = stepReadyEvent;
             setStepReadyEvent(null);
-            await handleAdvance(event.stepIndex);
+            await requestAdvance(event.stepIndex);
           }}
           onDismiss={() => {
             dismissedStepRef.current = stepReadyEvent.stepIndex;
             setStepReadyEvent(null);
           }}
+        />
+      )}
+
+      {advanceForm && (
+        <AdvanceFormOverlay
+          nextStepTitle={advanceForm.nextStepTitle}
+          fields={advanceForm.fields}
+          busy={wpBusy}
+          optionsByField={advanceOptions}
+          optionsLoading={advanceOptionsLoading}
+          onSubmit={async (inputs) => {
+            const ctx = advanceForm;
+            setAdvanceForm(null);
+            await handleAdvance(ctx.expectedCurrentStep, inputs);
+          }}
+          onCancel={() => setAdvanceForm(null)}
         />
       )}
 
@@ -348,7 +429,7 @@ export function TerminalTab(props: {
             packageTitle={activePackageDef.title}
             artifacts={artifacts}
             busy={wpBusy}
-            onAdvance={handleAdvance}
+            onAdvance={requestAdvance}
             onComplete={handleComplete}
             onScan={handleScan}
           />

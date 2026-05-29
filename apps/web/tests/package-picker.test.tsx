@@ -8,7 +8,7 @@ const planning: PackageCatalogEntry = {
   title: "기획",
   description: "spec → plan",
   cliRequirement: "claude",
-  fields: [],
+  forms: [{ step: 1, fields: [{ name: "topic", label: "Topic", kind: "text" }] }],
   stepTitles: ["Brainstorm", "Write plan"],
 };
 
@@ -17,7 +17,7 @@ const develop: PackageCatalogEntry = {
   title: "구현",
   description: "executing-plans",
   cliRequirement: "claude",
-  fields: [],
+  forms: [{ step: 1, fields: [] }],
   stepTitles: ["Execute plan"],
 };
 
@@ -26,7 +26,7 @@ const freeform: PackageCatalogEntry = {
   title: "자유 진행",
   description: "free prompt",
   cliRequirement: "any",
-  fields: [],
+  forms: [{ step: 1, fields: [] }],
   stepTitles: ["Work"],
 };
 

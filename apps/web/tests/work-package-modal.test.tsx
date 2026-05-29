@@ -8,13 +8,18 @@ const planning: PackageCatalogEntry = {
   title: "기획",
   description: "test",
   cliRequirement: "claude",
-  fields: [
+  forms: [
     {
-      name: "topic",
-      label: "Topic",
-      kind: "text",
-      required: true,
-      maxLength: 100,
+      step: 1,
+      fields: [
+        {
+          name: "topic",
+          label: "Topic",
+          kind: "text",
+          required: true,
+          maxLength: 100,
+        },
+      ],
     },
   ],
   stepTitles: ["Brainstorm", "Write plan"],
@@ -25,13 +30,18 @@ const develop: PackageCatalogEntry = {
   title: "구현",
   description: "executing-plans",
   cliRequirement: "claude",
-  fields: [
+  forms: [
     {
-      name: "planPath",
-      label: "Plan document",
-      kind: "select",
-      required: true,
-      optionsSource: "plans",
+      step: 1,
+      fields: [
+        {
+          name: "planPath",
+          label: "Plan document",
+          kind: "select",
+          required: true,
+          optionsSource: "plans",
+        },
+      ],
     },
   ],
   stepTitles: ["Execute plan"],

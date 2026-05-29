@@ -44,7 +44,9 @@ export function WorkPackageModal(props: {
       return;
     }
     const pkg = props.packages.find((p) => p.id === selectedId);
-    const dynamicFields = pkg?.fields.filter((f) => f.optionsSource) ?? [];
+    const startFields =
+      pkg?.forms.find((f) => f.step === 1)?.fields ?? [];
+    const dynamicFields = startFields.filter((f) => f.optionsSource);
     if (dynamicFields.length === 0 || !loadOptions) {
       setOptionsByField({});
       return;
@@ -105,7 +107,7 @@ export function WorkPackageModal(props: {
           />
         ) : (
           <PackageStartForm
-            fields={selected.fields}
+            fields={selected.forms.find((f) => f.step === 1)?.fields ?? []}
             busy={props.busy}
             errorMessage={props.errorMessage}
             optionsByField={optionsByField}

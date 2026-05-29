@@ -9,7 +9,7 @@ const baseInstance: WorkPackageDto = {
   packageId: "planning",
   currentStep: 1,
   status: "active",
-  inputs: { topic: "T" },
+  inputs: { "1": { topic: "T" } },
   createdAt: Date.now() - 60_000,
   advancedAt: Date.now() - 60_000,
   completedAt: null,
