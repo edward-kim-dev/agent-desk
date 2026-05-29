@@ -130,15 +130,30 @@ beforeEach(() => {
 });
 
 describe("GET /packages", () => {
-  it("planning 패키지를 반환한다", async () => {
+  it("planning · develop · freeform 패키지를 반환한다", async () => {
     const res = await fetch(`${url}/packages`, { headers });
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
-      packages: Array<{ id: string; stepTitles: string[] }>;
+      packages: Array<{
+        id: string;
+        stepTitles: string[];
+        fields: Array<{ name: string; kind: string; optionsSource?: string }>;
+      }>;
     };
-    expect(body.packages).toHaveLength(1);
-    expect(body.packages[0].id).toBe("planning");
-    expect(body.packages[0].stepTitles).toEqual(["Brainstorm", "Write plan"]);
+    expect(body.packages.map((p) => p.id)).toEqual([
+      "freeform",
+      "planning",
+      "develop",
+    ]);
+    const planning = body.packages.find((p) => p.id === "planning")!;
+    expect(planning.stepTitles).toEqual(["Brainstorm", "Write plan"]);
+    // develop 의 plan select 필드가 optionsSource 와 함께 직렬화된다
+    const develop = body.packages.find((p) => p.id === "develop")!;
+    expect(develop.fields[0]).toMatchObject({
+      name: "planPath",
+      kind: "select",
+      optionsSource: "plans",
+    });
   });
 });
 
@@ -562,5 +577,74 @@ describe("list endpoints", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { artifacts: unknown[] };
     expect(Array.isArray(body.artifacts)).toBe(true);
+  });
+});
+
+describe("GET /sessions/:id/plans", () => {
+  it("docs/superpowers/plans/ 의 .md 만 최신순으로 반환", async () => {
+    writeFileSync(join(fsRoot, "docs/superpowers/plans/2026-01-01-a.md"), "a");
+    writeFileSync(join(fsRoot, "docs/superpowers/plans/2026-02-02-b.md"), "b");
+    writeFileSync(join(fsRoot, "docs/superpowers/specs/ignore-me.md"), "s");
+
+    const res = await fetch(`${url}/sessions/${claudeSessionId}/plans`, {
+      headers,
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { plans: string[] };
+    expect(body.plans).toContain("docs/superpowers/plans/2026-01-01-a.md");
+    expect(body.plans).toContain("docs/superpowers/plans/2026-02-02-b.md");
+    expect(
+      body.plans.every((p) => p.startsWith("docs/superpowers/plans/")),
+    ).toBe(true);
+    // 최신순 (역정렬)
+    expect(
+      body.plans.indexOf("docs/superpowers/plans/2026-02-02-b.md"),
+    ).toBeLessThan(body.plans.indexOf("docs/superpowers/plans/2026-01-01-a.md"));
+  });
+
+  it("없는 세션 → 404", async () => {
+    const res = await fetch(`${url}/sessions/999999/plans`, { headers });
+    expect(res.status).toBe(404);
+  });
+});
+
+describe("freeform 패키지 start", () => {
+  it("skillName 이 비어 skill install 없이 prompt 를 그대로 주입한다", async () => {
+    const s = handle.db
+      .insert(sessions)
+      .values({
+        tmuxName: "ad-wp-free",
+        workspaceId,
+        cli: "claude",
+        args: "",
+        status: "active",
+        lastActivityAt: Date.now(),
+        createdAt: Date.now(),
+        adopted: 0,
+      })
+      .returning()
+      .all();
+    injectFn.mockClear();
+    ensureSkillFn.mockClear();
+    const res = await fetch(`${url}/sessions/${s[0].id}/work-packages`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        packageId: "freeform",
+        inputs: { prompt: "do the thing" },
+      }),
+    });
+    expect(res.status).toBe(200);
+    expect(ensureSkillFn).not.toHaveBeenCalled();
+    const firstCall = injectFn.mock.calls[0][0] as { prompt: string };
+    expect(firstCall.prompt).toBe("do the thing");
+
+    // 생성한 인스턴스는 정리해 다른 테스트의 active 가정과 충돌하지 않게 한다
+    const body = (await res.json()) as { instance: { id: number } };
+    await fetch(`${url}/work-packages/${body.instance.id}/complete`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ outcome: "abandoned" }),
+    });
   });
 });

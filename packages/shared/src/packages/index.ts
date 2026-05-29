@@ -1,15 +1,19 @@
 import type { PackageDefinition } from "./types";
 import { planning } from "./definitions/planning";
+import { develop } from "./definitions/develop";
+import { freeform } from "./definitions/freeform";
 
 export * from "./types";
 export * from "./format-prompt";
-export { planning };
+export { planning, develop, freeform };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AnyPackageDefinition = PackageDefinition<any>;
 
 export const PACKAGES: Record<string, AnyPackageDefinition> = {
+  [freeform.id]: freeform,
   [planning.id]: planning,
+  [develop.id]: develop,
 };
 
 export function getPackage(id: string): AnyPackageDefinition | undefined {

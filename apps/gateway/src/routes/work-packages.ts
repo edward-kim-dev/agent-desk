@@ -91,6 +91,33 @@ export function workPackageRoutes(opts: WorkPackageRouteOptions): {
     });
   });
 
+  // GET /sessions/:sessionId/plans — develop 패키지의 plan select 옵션 소스
+  sessionScoped.get("/:sessionId/plans", async (c) => {
+    const sid = Number(c.req.param("sessionId"));
+    if (!Number.isInteger(sid)) return c.json({ error: "bad_id" }, 400);
+
+    const sessionRow = opts.db
+      .select()
+      .from(sessions)
+      .where(eq(sessions.id, sid))
+      .get();
+    if (!sessionRow) return c.json({ error: "unknown_session" }, 404);
+    const ws = opts.db
+      .select()
+      .from(workspaces)
+      .where(eq(workspaces.id, sessionRow.workspaceId!))
+      .get();
+    if (!ws) return c.json({ error: "workspace_missing" }, 500);
+
+    const snap = await scan(ws.path);
+    const plans = snap
+      .map((s) => s.relPath)
+      .filter((p) => p.startsWith("docs/superpowers/plans/"))
+      .sort()
+      .reverse();
+    return c.json({ plans });
+  });
+
   // POST /sessions/:sessionId/work-packages
   sessionScoped.post("/:sessionId/work-packages", async (c) => {
     const sid = Number(c.req.param("sessionId"));
@@ -145,18 +172,20 @@ export function workPackageRoutes(opts: WorkPackageRouteOptions): {
     if (!ws) return c.json({ error: "workspace_missing" }, 500);
 
     let installResult: EnsureSkillResult | null = null;
-    try {
-      installResult = await ensureSkill({
-        workspacePath: ws.path,
-        skillName: def.steps[0].skillName,
-      });
-    } catch (err) {
-      installResult = {
-        status: "error",
-        linkPath: "",
-        sourcePath: "",
-        detail: (err as Error).message,
-      };
+    if (def.steps[0].skillName) {
+      try {
+        installResult = await ensureSkill({
+          workspacePath: ws.path,
+          skillName: def.steps[0].skillName,
+        });
+      } catch (err) {
+        installResult = {
+          status: "error",
+          linkPath: "",
+          sourcePath: "",
+          detail: (err as Error).message,
+        };
+      }
     }
 
     const baselineSnap = await scan(ws.path);
@@ -323,18 +352,20 @@ export function workPackageRoutes(opts: WorkPackageRouteOptions): {
     });
 
     let installResult: EnsureSkillResult | null = null;
-    try {
-      installResult = await ensureSkill({
-        workspacePath: ws.path,
-        skillName: nextStep.skillName,
-      });
-    } catch (err) {
-      installResult = {
-        status: "error",
-        linkPath: "",
-        sourcePath: "",
-        detail: (err as Error).message,
-      };
+    if (nextStep.skillName) {
+      try {
+        installResult = await ensureSkill({
+          workspacePath: ws.path,
+          skillName: nextStep.skillName,
+        });
+      } catch (err) {
+        installResult = {
+          status: "error",
+          linkPath: "",
+          sourcePath: "",
+          detail: (err as Error).message,
+        };
+      }
     }
 
     const inputs = JSON.parse(row.inputsJson) as Record<string, unknown>;

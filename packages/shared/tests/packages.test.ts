@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   PACKAGES,
+  develop,
   formatBrainstormingPrompt,
+  freeform,
   getPackage,
   planning,
   startWorkPackageRequest,
@@ -67,6 +69,74 @@ describe("packages registry", () => {
 
   it("startWorkPackageRequest 가 packageId 누락을 거부한다", () => {
     expect(startWorkPackageRequest.safeParse({ inputs: {} }).success).toBe(false);
+  });
+});
+
+describe("develop package", () => {
+  it("PACKAGES 에 등록되어 있고 cli=claude, 단일 step (executing-plans)", () => {
+    expect(PACKAGES.develop).toBe(develop);
+    expect(getPackage("develop")).toBe(develop);
+    expect(develop.cliRequirement).toBe("claude");
+    expect(develop.steps.map((s) => s.skillName)).toEqual(["executing-plans"]);
+  });
+
+  it("planPath 필드가 plans 를 source 로 하는 select 이다", () => {
+    const field = develop.startForm.fields[0];
+    expect(field.kind).toBe("select");
+    expect(field.optionsSource).toBe("plans");
+    expect(field.required).toBe(true);
+  });
+
+  it("promptTemplate 가 /executing-plans <planPath> 를 만든다", () => {
+    const out = develop.steps[0].promptTemplate(
+      { planPath: "docs/superpowers/plans/2026-05-27-foo.md" },
+      { workspacePath: "/tmp", packageInstanceId: 1 },
+    );
+    expect(out).toBe("/executing-plans docs/superpowers/plans/2026-05-27-foo.md");
+  });
+
+  it("schema 가 plans 디렉토리 밖 경로를 거부한다", () => {
+    expect(
+      develop.startForm.schema.safeParse({ planPath: "../../etc/passwd" })
+        .success,
+    ).toBe(false);
+    expect(
+      develop.startForm.schema.safeParse({
+        planPath: "docs/superpowers/specs/x.md",
+      }).success,
+    ).toBe(false);
+    expect(
+      develop.startForm.schema.safeParse({
+        planPath: "docs/superpowers/plans/x.md",
+      }).success,
+    ).toBe(true);
+  });
+});
+
+describe("freeform package", () => {
+  it("PACKAGES 에 등록되어 있고 cli=any, skillName 이 빈 단일 step", () => {
+    expect(PACKAGES.freeform).toBe(freeform);
+    expect(freeform.cliRequirement).toBe("any");
+    expect(freeform.steps).toHaveLength(1);
+    expect(freeform.steps[0].skillName).toBe("");
+  });
+
+  it("promptTemplate 가 prompt 를 그대로 (줄바꿈만 치환) 반환한다", () => {
+    const out = freeform.steps[0].promptTemplate(
+      { prompt: "line1\nline2" },
+      { workspacePath: "/tmp", packageInstanceId: 1 },
+    );
+    expect(out).toBe("line1 · line2");
+  });
+});
+
+describe("PACKAGES registry shape", () => {
+  it("freeform · planning · develop 순서로 노출된다", () => {
+    expect(Object.values(PACKAGES).map((p) => p.id)).toEqual([
+      "freeform",
+      "planning",
+      "develop",
+    ]);
   });
 });
 
