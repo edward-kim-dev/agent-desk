@@ -88,6 +88,8 @@ export const gateway = {
         `work-packages/${id}/artifacts`,
         opts,
       ),
+    listPlans: (sessionId: number, opts?: AbortOptions) =>
+      call<{ plans: string[] }>(`sessions/${sessionId}/plans`, opts),
     start: (sessionId: number, input: StartWorkPackageRequest) =>
       call<StartWorkPackageResponse>(`sessions/${sessionId}/work-packages`, {
         method: "POST",

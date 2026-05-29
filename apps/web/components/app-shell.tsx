@@ -103,6 +103,7 @@ export function AppShell() {
           <TerminalTab
             activeWorkspaceId={activeId}
             sessionsOpen={terminalSessionsOpen}
+            onCloseSessions={() => setTerminalSessionsOpen(false)}
           />
         )}
         {tab === "wiki" && (

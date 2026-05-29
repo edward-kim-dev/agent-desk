@@ -9,6 +9,9 @@ export function PackageStartForm(props: {
   busy?: boolean;
   errorMessage?: string | null;
   submitLabel?: string;
+  /** `kind: "select"` 필드의 동적 옵션 — field name → 옵션 목록. */
+  optionsByField?: Record<string, string[]>;
+  optionsLoading?: boolean;
   onBack: () => void;
   onSubmit: (payload: Record<string, string>) => void | Promise<void>;
   onDismiss: () => void;
@@ -17,7 +20,9 @@ export function PackageStartForm(props: {
   const [values, setValues] = useState<Record<string, string>>(() =>
     Object.fromEntries(props.fields.map((f) => [f.name, ""])),
   );
-  const firstRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
+  const firstRef = useRef<
+    HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null
+  >(null);
   useEffect(() => {
     queueMicrotask(() => firstRef.current?.focus());
   }, []);
@@ -44,9 +49,47 @@ export function PackageStartForm(props: {
     >
       {props.fields.map((f, i) => {
         const id = `${baseId}-${f.name}`;
+        const onChange = (
+          e: React.ChangeEvent<
+            HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+          >,
+        ) => setValues((v) => ({ ...v, [f.name]: e.target.value }));
         return (
           <Field key={f.name} htmlFor={id} label={f.label} hint={f.hint}>
-            {f.kind === "text" ? (
+            {f.kind === "select" ? (
+              (() => {
+                const options = props.optionsByField?.[f.name] ?? [];
+                const empty = options.length === 0;
+                return (
+                  <select
+                    ref={
+                      i === 0
+                        ? (firstRef as React.RefObject<HTMLSelectElement>)
+                        : undefined
+                    }
+                    id={id}
+                    required={f.required}
+                    disabled={empty}
+                    value={values[f.name]}
+                    onChange={onChange}
+                    className={fieldControl}
+                  >
+                    <option value="" disabled>
+                      {props.optionsLoading
+                        ? "불러오는 중…"
+                        : empty
+                          ? "사용 가능한 문서 없음"
+                          : "선택…"}
+                    </option>
+                    {options.map((o) => (
+                      <option key={o} value={o}>
+                        {o}
+                      </option>
+                    ))}
+                  </select>
+                );
+              })()
+            ) : f.kind === "text" ? (
               <input
                 ref={
                   i === 0
@@ -59,9 +102,7 @@ export function PackageStartForm(props: {
                 maxLength={f.maxLength}
                 placeholder={f.placeholder}
                 value={values[f.name]}
-                onChange={(e) =>
-                  setValues((v) => ({ ...v, [f.name]: e.target.value }))
-                }
+                onChange={onChange}
                 className={fieldControl}
               />
             ) : (
@@ -76,9 +117,7 @@ export function PackageStartForm(props: {
                 maxLength={f.maxLength}
                 placeholder={f.placeholder}
                 value={values[f.name]}
-                onChange={(e) =>
-                  setValues((v) => ({ ...v, [f.name]: e.target.value }))
-                }
+                onChange={onChange}
                 className={`${fieldControl} resize-y`}
               />
             )}

@@ -21,6 +21,7 @@ const POLL_INTERVAL_MS = 3000;
 export function TerminalTab(props: {
   activeWorkspaceId: number | null;
   sessionsOpen: boolean;
+  onCloseSessions: () => void;
 }) {
   const [sessions, setSessions] = useState<SessionDto[]>([]);
   const [selectedSessionId, setSelectedSessionId] = useState<number | null>(
@@ -197,6 +198,20 @@ export function TerminalTab(props: {
     [selectedSessionId, refreshArtifacts],
   );
 
+  const loadOptions = useCallback(
+    async (source: string): Promise<string[]> => {
+      if (selectedSessionId == null) return [];
+      if (source === "plans") {
+        const { plans } = await gateway.workPackages.listPlans(
+          selectedSessionId,
+        );
+        return plans;
+      }
+      return [];
+    },
+    [selectedSessionId],
+  );
+
   const handleDismissModal = useCallback(() => {
     if (selectedSessionId != null)
       dismissedRef.current.add(selectedSessionId);
@@ -343,7 +358,10 @@ export function TerminalTab(props: {
           sessions={sessions}
           activeWorkspaceId={props.activeWorkspaceId}
           selectedId={selectedSessionId}
-          onSelect={setSelectedSessionId}
+          onSelect={(id) => {
+            setSelectedSessionId(id);
+            props.onCloseSessions();
+          }}
           onKill={async (id) => {
             await gateway.sessions.remove(id);
             refreshSessions();
@@ -357,6 +375,7 @@ export function TerminalTab(props: {
         sessionCli={selectedSession?.cli ?? "claude"}
         busy={modalBusy}
         errorMessage={modalError}
+        loadOptions={loadOptions}
         onStart={handleStart}
         onDismiss={handleDismissModal}
       />

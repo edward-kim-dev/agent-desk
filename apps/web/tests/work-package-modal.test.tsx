@@ -20,6 +20,23 @@ const planning: PackageCatalogEntry = {
   stepTitles: ["Brainstorm", "Write plan"],
 };
 
+const develop: PackageCatalogEntry = {
+  id: "develop",
+  title: "구현",
+  description: "executing-plans",
+  cliRequirement: "claude",
+  fields: [
+    {
+      name: "planPath",
+      label: "Plan document",
+      kind: "select",
+      required: true,
+      optionsSource: "plans",
+    },
+  ],
+  stepTitles: ["Execute plan"],
+};
+
 describe("<WorkPackageModal>", () => {
   it("열리면 picker 부터 표시 (V1 패키지 1 개여도)", () => {
     render(
@@ -91,6 +108,45 @@ describe("<WorkPackageModal>", () => {
       expect(onStart).toHaveBeenCalledWith({
         packageId: "planning",
         inputs: { topic: "T" },
+      }),
+    );
+  });
+
+  it("optionsSource 필드가 있는 패키지 선택 시 loadOptions 로 옵션을 채운다", async () => {
+    const loadOptions = vi.fn(async (source: string) =>
+      source === "plans" ? ["docs/superpowers/plans/x.md"] : [],
+    );
+    const onStart = vi.fn();
+    render(
+      <WorkPackageModal
+        open
+        packages={[develop]}
+        sessionCli="claude"
+        loadOptions={loadOptions}
+        onStart={onStart}
+        onDismiss={() => {}}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /구현/ }));
+    await waitFor(() =>
+      expect(loadOptions).toHaveBeenCalledWith("plans"),
+    );
+    const select = (await screen.findByLabelText(
+      /Plan document/i,
+    )) as HTMLSelectElement;
+    await waitFor(() =>
+      expect(
+        screen.getByRole("option", { name: "docs/superpowers/plans/x.md" }),
+      ).toBeTruthy(),
+    );
+    fireEvent.change(select, {
+      target: { value: "docs/superpowers/plans/x.md" },
+    });
+    fireEvent.submit(screen.getByRole("form"));
+    await waitFor(() =>
+      expect(onStart).toHaveBeenCalledWith({
+        packageId: "develop",
+        inputs: { planPath: "docs/superpowers/plans/x.md" },
       }),
     );
   });

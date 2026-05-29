@@ -13,10 +13,16 @@ export function WorkPackageModal(props: {
   sessionCli: string;
   busy?: boolean;
   errorMessage?: string | null;
+  /** `optionsSource` 가 있는 select 필드의 옵션을 동적으로 가져온다. */
+  loadOptions?: (source: string) => Promise<string[]>;
   onStart: (body: StartWorkPackageRequest) => void | Promise<void>;
   onDismiss: () => void;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [optionsByField, setOptionsByField] = useState<
+    Record<string, string[]>
+  >({});
+  const [optionsLoading, setOptionsLoading] = useState(false);
 
   useEffect(() => {
     if (!props.open) setSelectedId(null);
@@ -30,6 +36,40 @@ export function WorkPackageModal(props: {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [props.open, props]);
+
+  const loadOptions = props.loadOptions;
+  useEffect(() => {
+    if (selectedId == null) {
+      setOptionsByField({});
+      return;
+    }
+    const pkg = props.packages.find((p) => p.id === selectedId);
+    const dynamicFields = pkg?.fields.filter((f) => f.optionsSource) ?? [];
+    if (dynamicFields.length === 0 || !loadOptions) {
+      setOptionsByField({});
+      return;
+    }
+    let cancelled = false;
+    setOptionsLoading(true);
+    setOptionsByField({});
+    void (async () => {
+      const acc: Record<string, string[]> = {};
+      for (const f of dynamicFields) {
+        try {
+          acc[f.name] = await loadOptions(f.optionsSource!);
+        } catch {
+          acc[f.name] = [];
+        }
+      }
+      if (!cancelled) {
+        setOptionsByField(acc);
+        setOptionsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedId, props.packages, loadOptions]);
 
   if (!props.open) return null;
   const selected = selectedId
@@ -68,6 +108,8 @@ export function WorkPackageModal(props: {
             fields={selected.fields}
             busy={props.busy}
             errorMessage={props.errorMessage}
+            optionsByField={optionsByField}
+            optionsLoading={optionsLoading}
             onBack={() => setSelectedId(null)}
             onDismiss={props.onDismiss}
             onSubmit={async (inputs) => {

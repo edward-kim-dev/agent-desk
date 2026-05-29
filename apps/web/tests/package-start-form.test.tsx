@@ -69,4 +69,65 @@ describe("<PackageStartForm>", () => {
     fireEvent.click(screen.getByRole("button", { name: /Back/i }));
     expect(onBack).toHaveBeenCalled();
   });
+
+  it("select 필드를 optionsByField 옵션으로 렌더하고 선택값을 제출한다", () => {
+    const onSubmit = vi.fn();
+    const selectFields: FieldSpec[] = [
+      {
+        name: "planPath",
+        label: "Plan",
+        kind: "select",
+        required: true,
+        optionsSource: "plans",
+      },
+    ];
+    render(
+      <PackageStartForm
+        fields={selectFields}
+        optionsByField={{
+          planPath: ["docs/superpowers/plans/a.md", "docs/superpowers/plans/b.md"],
+        }}
+        onSubmit={onSubmit}
+        onDismiss={() => {}}
+        onBack={() => {}}
+      />,
+    );
+    const select = screen.getByLabelText(/Plan/i) as HTMLSelectElement;
+    expect(select.tagName).toBe("SELECT");
+    fireEvent.change(select, {
+      target: { value: "docs/superpowers/plans/b.md" },
+    });
+    fireEvent.submit(screen.getByRole("form"));
+    expect(onSubmit).toHaveBeenCalledWith({
+      planPath: "docs/superpowers/plans/b.md",
+    });
+  });
+
+  it("select 옵션이 비면 disabled + 안내 옵션", () => {
+    const selectFields: FieldSpec[] = [
+      {
+        name: "planPath",
+        label: "Plan",
+        kind: "select",
+        required: true,
+        optionsSource: "plans",
+      },
+    ];
+    render(
+      <PackageStartForm
+        fields={selectFields}
+        optionsByField={{ planPath: [] }}
+        onSubmit={() => {}}
+        onDismiss={() => {}}
+        onBack={() => {}}
+      />,
+    );
+    const select = screen.getByLabelText(/Plan/i) as HTMLSelectElement;
+    expect(select.disabled).toBe(true);
+    expect(screen.getByText(/사용 가능한 문서 없음/)).toBeTruthy();
+    expect(
+      (screen.getByRole("button", { name: /Start work package/i }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+  });
 });
